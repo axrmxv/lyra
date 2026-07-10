@@ -1,0 +1,126 @@
+# Запускать через make (docker compose -f infra/docker-compose.yml --project-directory .):
+# пути ниже — относительно корня репозитория, .env читается из корня.
+name: lyra
+
+services:
+  api:
+    build: ./backend
+    env_file: .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/lyra:/app/lyra
+      - ./backend/tests:/app/tests
+    command: ["uvicorn", "lyra.api.app:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      - postgres
+      - redis
+
+  worker:
+    build: ./backend
+    env_file: .env
+    volumes:
+      - ./backend/lyra:/app/lyra
+    command: ["celery", "-A", "lyra.workers.celery_app", "worker", "-Q", "ingest,sync,evals", "-l", "info"]
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A lyra.workers.celery_app inspect ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    depends_on:
+      - redis
+
+  frontend:
+    image: node:20-alpine
+    user: node
+    working_dir: /app
+    environment:
+      VITE_API_PROXY: http://api:8000
+    volumes:
+      - ./frontend:/app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5173"
+    ports:
+      - "5173:5173"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5173"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    depends_on:
+      - api
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${LYRA_DB_USER:-lyra}
+      POSTGRES_PASSWORD: ${LYRA_DB_PASSWORD:-lyra}
+      POSTGRES_DB: ${LYRA_DB_NAME:-lyra}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${LYRA_DB_USER:-lyra} -d ${LYRA_DB_NAME:-lyra}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ollama:
+    image: ollama/ollama
+    volumes:
+      # Имя volume фиксировано: модели предзагружены до фазы 0 (prompts/phase-00)
+      - ollama_models:/root/.ollama
+    ports:
+      - "11434:11434"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  embeddings:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-latest
+    # max-batch-tokens ограничен: дефолт вызывает OOM (exit 137) на warmup
+    # при CPU-инференсе в WSL2; 4096 достаточно для батчей ingest
+    command: ["--model-id", "BAAI/bge-m3", "--max-batch-tokens", "4096", "--auto-truncate"]
+    volumes:
+      - hf_cache:/data
+    ports:
+      - "8081:80"
+    # healthcheck отсутствует сознательно: в образе TEI нет shell/curl;
+    # готовность проверяется через GET /health/ready нашего API
+
+  reranker:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-latest
+    command: ["--model-id", "BAAI/bge-reranker-v2-m3", "--max-batch-tokens", "4096", "--auto-truncate"]
+    volumes:
+      - hf_cache:/data
+    ports:
+      - "8082:80"
+    # healthcheck: см. комментарий у embeddings
+
+volumes:
+  pgdata:
+  ollama_models:
+    name: ollama_models
+  hf_cache:
+    name: hf_cache

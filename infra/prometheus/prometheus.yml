@@ -1,0 +1,9 @@
+# Заготовка: сервис prometheus добавляется в compose в фазе 6 (наблюдаемость).
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: lyra-api
+    static_configs:
+      - targets: ["api:8000"]
+    metrics_path: /metrics
