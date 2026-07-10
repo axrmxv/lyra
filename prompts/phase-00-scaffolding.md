@@ -32,7 +32,7 @@
 5. **Frontend:** Vite-болванка с одной страницей «LYRA», прокси `/api` на backend, eslint+prettier+vitest настроены, один smoke-тест рендера. Размещение тестов — рядом с кодом (`Component.test.tsx`), зафиксируй include-паттерном в конфиге vitest (правило `.claude/rules/typescript.md`).
 6. **Makefile:** `make up`, `make down`, `make logs`, `make test` (pytest+vitest), `make lint`, `make pull-models`.
 7. **CI (GitHub Actions):** jobs: lint (ruff, mypy, eslint), test-backend (pytest), test-frontend (vitest). Без docker-билдов тяжёлых моделей в CI.
-8. **Гигиена:** `.gitignore` (включая `.env`), `.env.example` со ВСЕМИ переменными и плейсхолдерами (секретов в репозитории нет — правило из `docs/security-and-access.md` §5), pre-commit (ruff, prettier), контейнеры приложений от non-root пользователя.
+8. **Гигиена:** `.gitignore` (включая `.env`), `.env.example` со ВСЕМИ переменными и плейсхолдерами (секретов в репозитории нет — правило из `docs/security-and-access.md` §5), pre-commit: ruff, prettier, **gitleaks** (сканер секретов, также job в CI) и **commitlint** (commit-msg hook, формат Conventional Commits из `.claude/rules/git.md` — типы feat/fix/docs/test/refactor/chore/ci/perf, subject ≤50), контейнеры приложений от non-root пользователя.
 
 ## Критерии приёмки
 - `docker compose -f infra/docker-compose.yml up` поднимает весь стек; `/health/ready` отдаёт статусы всех 5 зависимостей.

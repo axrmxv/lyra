@@ -13,7 +13,7 @@
 
 ### Фаза 0 — Скаффолдинг и инфраструктура разработки
 **Цель:** пустой, но запускающийся скелет всего стека одной командой.
-**Объём:** монорепо (`backend/`, `frontend/`, `infra/`, `evals/`); FastAPI-приложение с /health, /metrics, структурными логами; React+Vite+TS болванка; docker-compose: api, worker, frontend, postgres(+pgvector), redis, ollama, tei-embeddings, tei-reranker; Makefile; GitHub Actions (lint ruff+mypy+eslint, pytest, vitest); pre-commit.
+**Объём:** монорепо (`backend/`, `frontend/`, `infra/`, `evals/`); FastAPI-приложение с /health, /metrics, структурными логами; React+Vite+TS болванка; docker-compose: api, worker, frontend, postgres(+pgvector), redis, ollama, tei-embeddings, tei-reranker; Makefile; GitHub Actions (lint ruff+mypy+eslint, pytest, vitest, gitleaks); pre-commit (ruff, prettier, gitleaks, commitlint).
 **Артефакты:** compose поднимает весь стек; CI зелёный на пустых тестах.
 **DoD:** `docker compose up` → /health/ready показывает статус всех зависимостей; CI проходит; README с запуском.
 **Зависимости:** — · **Оценка:** 2–3 дня · **Промпт:** [prompts/phase-00-scaffolding.md](prompts/phase-00-scaffolding.md)
