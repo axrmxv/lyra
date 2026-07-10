@@ -117,7 +117,7 @@ flowchart TB
     DEDUP -->|нет| CHUNK["chunk: structure-aware разбиение<br/>ADR-002, context-management.md"]
     CHUNK --> EMBED["embed: батчами через bge-m3<br/>retry + rate limit"]
     EMBED --> INDEX["index: транзакция в PostgreSQL<br/>chunks + vector + tsvector + метаданные"]
-    INDEX --> VERSION["активация версии: new version visible,<br/>старые chunks помечаются stale"]
+    INDEX --> VERSION["активация версии: new version visible,<br/>прежняя версия — superseded"]
     VERSION --> DONE["job: completed + метрики"]
 
     PARSE -.->|ошибка| FAIL["job: failed + причина, retry с backoff"]

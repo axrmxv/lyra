@@ -28,6 +28,7 @@ REST API FastAPI, префикс `/api/v1`. Все схемы — Pydantic v2, O
 
 ### POST /documents/upload — editor
 `multipart/form-data`: `file` (PDF/DOCX/MD/TXT, ≤50 МБ), `collection_id`.
+Документ привязывается к неявному source типа `upload` коллекции (создаётся автоматически при первом upload; у каждой коллекции ровно один upload-source).
 Синхронно только сохраняет файл и ставит задачу (FR-2):
 ```json
 // 202

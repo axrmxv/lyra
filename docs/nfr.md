@@ -11,7 +11,7 @@
 | **Chat: полный ответ** (happy path, без corrective) | ≤ 8 с | ≤ 20 с | ≤ 2.5 с | ≤ 6 с | Доминирует LLM-инференс на CPU; SSE-стриминг скрывает часть ожидания |
 | Chat: **время до первого токена** | ≤ 4 с | ≤ 10 с | ≤ 1.2 с | ≤ 2.5 с | UX-критичная метрика: retrieval + grading + начало генерации |
 | Chat: worst case (2 corrective + self-check retry) | ≤ 25 с | ≤ 60 с | ≤ 8 с | ≤ 15 с | Ограничен жёсткими лимитами циклов ([ADR-006](adr/ADR-006-langgraph-topology.md)); дольше 60 с — таймаут и честная ошибка |
-| **/search** (raw retrieval, с rerank) | ≤ 700 мс | ≤ 2 с | ≤ 300 мс | ≤ 500 мс | Доминирует reranker на CPU (50 пар) |
+| **/search** (raw retrieval, с rerank) | ≤ 1.2 с | ≤ 2 с | ≤ 300 мс | ≤ 500 мс | Доминирует reranker на CPU (50 пар, ~1 с) |
 | /search (без rerank / rerank degraded) | ≤ 200 мс | ≤ 500 мс | ≤ 100 мс | ≤ 250 мс | BM25 + HNSW + RRF |
 | Upload → 202 (постановка job) | ≤ 200 мс | ≤ 500 мс | — | — | Синхронная часть ingest минимальна (FR-2) |
 

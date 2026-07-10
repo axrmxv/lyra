@@ -92,7 +92,7 @@ erDiagram
 | ordinal | int | порядок в документе |
 | text | text | то, что идёт в контекст LLM |
 | embedding | vector(1024) | bge-m3; HNSW-индекс (cosine) |
-| tsv | tsvector | GENERATED из text, конфигурация russian+english; GIN-индекс |
+| tsv | tsvector | GENERATED из text, конфигурация `russian` (латинские токены в ней обрабатываются english_stem — достаточно для смешанного ru+en корпуса); GIN-индекс |
 | token_count | int | для бюджета контекста |
 | metadata | jsonb | схема ниже; GIN-индекс |
 
