@@ -4,6 +4,7 @@ description: Разобрать трейс одного RAG-запроса по 
 
 Разбери прохождение запроса через RAG-граф. Вход: $ARGUMENTS (trace_id, например tr_01H..., либо текст вопроса — тогда сначала найди его trace_id в последних логах).
 
+0. Предусловие: команда работает начиная с фазы 4 (`PLAN.md` — граф и трейсинг созданы). Если `infra/docker-compose.yml` или пакет `lyra/rag/` ещё не существуют — сообщи об этом и остановись.
 1. Достань все записи трейса: `docker compose -f infra/docker-compose.yml logs api worker | grep <trace_id>` (структурные JSON-логи; распарси jq-ом при необходимости). Если есть запись в `messages` — возьми также `graph_meta`.
 2. Восстанови траекторию по узлам (`docs/adr/ADR-006-langgraph-topology.md`): condense → retrieve → grade_sufficiency → [corrective]* → generate → cite → self_check → answer/refusal.
 3. Выведи разбор:

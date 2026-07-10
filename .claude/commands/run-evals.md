@@ -4,6 +4,7 @@ description: Прогнать offline-evals и сравнить с baseline
 
 Прогони eval-контур и разбери результат:
 
+0. Предусловие: команда работает начиная с фазы 6 (`PLAN.md`). Если `Makefile` или `evals/thresholds.yaml` ещё не существуют — сообщи, что eval-контур появится в фазе 6, и остановись.
 1. Убедись, что стек поднят (`docker compose -f infra/docker-compose.yml ps`); если нет — `make up` и дождись healthy.
 2. Убедись, что демо-корпус посеян (в БД есть chunks); если нет — `make seed-demo`.
 3. Запусти: `make eval` (эквивалент `python -m lyra.evals run --dataset golden`). Аргумент команды `$ARGUMENTS`, если передан, — имя датасета или `--judge cloud|local`.

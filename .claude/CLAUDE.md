@@ -29,6 +29,6 @@ Python 3.11+ / FastAPI / Pydantic v2 / SQLAlchemy 2.0 async / Alembic / LangGrap
 - Новые эндпоинты обязаны иметь `require_role` и тест RBAC-матрицы.
 
 ## Рабочие правила
-- Тесты — часть объёма фазы, не «потом»; изменения промптов/retrieval/chunking → прогон evals (`make eval`), пороги в `evals/thresholds.yaml` не менять без ADR-обоснования.
+- Тесты — часть объёма фазы, не «потом»; изменения промптов/retrieval/chunking → прогон evals (`make eval`), пороги в `evals/thresholds.yaml` (появляется в фазе 6) не менять без ADR-обоснования.
 - Русский язык в UI, промптах и eval-датасете; технические термины — английские.
-- Команды: `make up / test / lint / eval / seed-demo`.
+- Команды: `make up / test / lint / eval / seed-demo` (Makefile появляется в фазе 0; eval-контур — в фазе 6; до этого команды недоступны — не пытаться запускать).

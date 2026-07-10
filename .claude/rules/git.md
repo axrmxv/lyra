@@ -9,7 +9,7 @@ paths:
 ## Commits
 
 - **Conventional commits**: `<type>(<scope>): <суть>`. Типы: `feat`, `fix`, `docs`, `test`, `refactor`, `chore`, `ci`, `perf`. Scope — зона проекта: `rag`, `retrieval`, `ingest`, `api`, `ui`, `evals`, `db`, `infra`; scope опционален для сквозных изменений.
-- Заголовок — английский тип/scope, суть можно по-русски (принято первым коммитом репозитория); ≤ 72 символа, без точки в конце. Тело — по-русски: что и зачем (не «как» — это видно в diff), пустая строка после заголовка.
+- Заголовок — английский тип/scope, суть можно по-русски (принято первым коммитом репозитория); ≤ 50 символов, без точки в конце. Тело — по-русски: что и зачем (не «как» — это видно в diff), пустая строка после заголовка, строки ≤ 72 символов.
 - Коммит атомарен: одна логическая единица; «and» в заголовке — сигнал разделить. Каждый коммит проходит `make test lint` (не коммитить заведомо красное, кроме WIP в личной ветке с последующим squash).
 - Коммиты, сгенерированные с участием Claude, завершаются трейлером `Co-Authored-By: Claude <модель> <noreply@anthropic.com>`.
 - Изменение промптов/retrieval/chunking в коммите → перед PR обязателен `make eval` (правило CLAUDE.md); упомянуть результат в теле коммита или PR.
@@ -33,20 +33,22 @@ paths:
 # Ответвляйся всегда от свежего main
 git checkout main
 git pull origin main
-git checkout -b feat/jwt-auth
+git checkout -b feat/rag-retriever
 
 # Работа и атомарные коммиты (см. commit-раздел выше)
-git add src/auth/jwt.py
-git commit -m "feat(auth): add JWT validation"
+git add backend/lyra/retrieval/retriever.py
+git commit -m "feat(retrieval): add hybrid retriever"
 
 # Публикация ветки
-git push -u origin feat/jwt-auth
+git push -u origin feat/rag-retriever
 
 # После открытия PR, self-review и merge на GitHub:
 git checkout main
 git pull origin main
-git branch -d feat/jwt-auth
+git branch -d feat/rag-retriever
 ```
+
+До публикации репозитория на GitHub (remote не настроен) шаги `pull`/`push` пропускаются — остальной цикл действует.
 
 Правила:
 - Ответвляйся только от актуального `main` (`git pull` перед созданием ветки).
@@ -66,11 +68,13 @@ git branch -d feat/jwt-auth
 | `chore/` | `chore/bump-deps` |
 | `docs/` | `docs/api-readme` |
 
-Ветка и её коммиты используют один и тот же `type`.
+Также допустимы `test/`, `ci/`, `perf/` — полный список типов в разделе «Commits».
+
+Type ветки — основной type работы; вспомогательные коммиты других типов (`test`, `docs`, `refactor`) внутри ветки допустимы.
 
 ### Защита main
 
-`main` защищён через branch protection на GitHub. Прямой push запрещён, изменения только через PR. Перед merge должны проходить проверки CI и hooks.
+`main` подлежит защите branch protection после публикации репозитория на GitHub (см. Gaps): прямой push запрещён, изменения только через PR, перед merge проходят проверки CI и hooks. До настройки protection запрет прямых коммитов действует как дисциплина.
 
 ## PR / Review
 
