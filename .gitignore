@@ -1,0 +1,30 @@
+# Секреты и локальная конфигурация
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Node / frontend
+node_modules/
+dist/
+*.local
+
+# Данные и модели (живут в docker volumes, но на всякий случай)
+volumes/
+*.dump
+uploads/
+
+# IDE / OS
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store
