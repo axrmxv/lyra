@@ -11,7 +11,9 @@ services:
     volumes:
       - ./backend/lyra:/app/lyra
       - ./backend/tests:/app/tests
-    command: ["uvicorn", "lyra.api.app:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+      - ./backend/migrations:/app/migrations
+      - ./backend/alembic.ini:/app/alembic.ini
+    command: ["sh", "-c", "alembic upgrade head && exec uvicorn lyra.api.app:app --host 0.0.0.0 --port 8000 --reload"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
       interval: 15s
@@ -19,8 +21,10 @@ services:
       retries: 5
       start_period: 10s
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
 
   worker:
     build: ./backend

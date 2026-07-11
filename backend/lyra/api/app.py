@@ -9,19 +9,61 @@ from collections.abc import Awaitable, Callable
 
 import structlog
 from fastapi import FastAPI, Request, Response
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from lyra.api import readiness
+from lyra.api.routes.admin import router as admin_router
+from lyra.api.routes.auth import router as auth_router
 from lyra.core.config import get_settings
+from lyra.core.errors import LyraError
 from lyra.core.logging import configure_logging
 
 logger = structlog.get_logger(__name__)
 
 
+def _error_body(
+    code: str, message: str, details: dict[str, object] | None = None
+) -> dict[str, object]:
+    return {"error": {"code": code, "message": message, "details": details or {}}}
+
+
 def create_app() -> FastAPI:
     configure_logging()
     app = FastAPI(title="LYRA", version="0.1.0")
+
+    app.include_router(auth_router, prefix="/api/v1")
+    app.include_router(admin_router, prefix="/api/v1")
+
+    @app.exception_handler(LyraError)
+    async def lyra_error_handler(_request: Request, exc: LyraError) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=_error_body(exc.code, exc.message, exc.details),
+        )
+
+    @app.exception_handler(StarletteHTTPException)
+    async def http_error_handler(_request: Request, exc: StarletteHTTPException) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=_error_body(f"http_{exc.status_code}", str(exc.detail)),
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error_handler(
+        _request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=400,
+            content=_error_body(
+                "validation_error",
+                "Невалидный запрос",
+                {"errors": jsonable_encoder(exc.errors())},
+            ),
+        )
 
     @app.middleware("http")
     async def trace_id_middleware(
