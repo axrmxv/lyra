@@ -15,7 +15,7 @@ from alembic import command
 from alembic.config import Config as AlembicConfig
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from lyra.core.config import Settings
+from lyra.core.config import Settings, get_settings
 from lyra.core.constants import DEFAULT_TENANT_ID
 
 TEST_DB_NAME = "lyra_test"
@@ -32,6 +32,9 @@ def migrated_db(test_settings: Settings) -> Iterator[Settings]:
     """alembic upgrade head на lyra_test (создать БД заранее: CREATE DATABASE lyra_test)."""
     env_backup = os.environ.get("LYRA_DB_NAME")
     os.environ["LYRA_DB_NAME"] = TEST_DB_NAME
+    # lru-кэши могли зафиксировать настройки до подмены LYRA_DB_NAME
+    # (например, тесты /health/ready вызывают get_settings раньше)
+    get_settings.cache_clear()
     try:
         config = AlembicConfig("alembic.ini")
         command.downgrade(config, "base")
@@ -42,6 +45,7 @@ def migrated_db(test_settings: Settings) -> Iterator[Settings]:
             os.environ.pop("LYRA_DB_NAME", None)
         else:
             os.environ["LYRA_DB_NAME"] = env_backup
+        get_settings.cache_clear()
 
 
 @pytest.fixture()

@@ -5,14 +5,17 @@ import asyncio
 from alembic import context
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from lyra.core.config import get_settings
+from lyra.core.config import Settings
 from lyra.db.models import Base
 
 target_metadata = Base.metadata
 
 
 def _dsn() -> str:
-    return get_settings().database_dsn.replace("postgresql://", "postgresql+asyncpg://")
+    # Settings() напрямую, НЕ get_settings(): lru-кэш в долгоживущем процессе
+    # (pytest) может хранить настройки, снятые до установки LYRA_DB_NAME,
+    # и миграция уйдёт не в ту БД
+    return Settings().database_dsn.replace("postgresql://", "postgresql+asyncpg://")
 
 
 def run_migrations_offline() -> None:

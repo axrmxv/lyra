@@ -15,7 +15,7 @@ import sqlalchemy as sa
 from alembic import op
 
 from lyra.core.auth import hash_password
-from lyra.core.config import get_settings
+from lyra.core.config import Settings  # не get_settings: см. комментарий в env.py
 from lyra.core.constants import DEFAULT_TENANT_ID
 
 revision: str = "a1b2c3d4e5f6"
@@ -38,7 +38,7 @@ DEFAULT_CHUNKING_CONFIG = {
 
 
 def upgrade() -> None:
-    settings = get_settings()
+    settings = Settings()
     bind = op.get_bind()
 
     bind.execute(
@@ -78,9 +78,29 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """Удаляет ТОЛЬКО созданное этой миграцией: точные WHERE, не tenant-wide.
+
+    К моменту downgrade в БД могут существовать другие строки того же tenant
+    (созданные приложением/тестами) — широкий DELETE ловил FK-violation.
+    """
+    settings = Settings()
     bind = op.get_bind()
     bind.execute(
-        sa.text("DELETE FROM collections WHERE tenant_id = :tid"), {"tid": DEFAULT_TENANT_ID}
+        sa.text(
+            "DELETE FROM collections WHERE tenant_id = :tid "
+            "AND name = 'default' AND NOT EXISTS "
+            "(SELECT 1 FROM sources WHERE sources.collection_id = collections.id)"
+        ),
+        {"tid": DEFAULT_TENANT_ID},
     )
-    bind.execute(sa.text("DELETE FROM users WHERE tenant_id = :tid"), {"tid": DEFAULT_TENANT_ID})
-    bind.execute(sa.text("DELETE FROM tenants WHERE id = :tid"), {"tid": DEFAULT_TENANT_ID})
+    bind.execute(
+        sa.text("DELETE FROM users WHERE tenant_id = :tid AND email = :email"),
+        {"tid": DEFAULT_TENANT_ID, "email": settings.admin_email},
+    )
+    bind.execute(
+        sa.text(
+            "DELETE FROM tenants WHERE id = :tid AND NOT EXISTS "
+            "(SELECT 1 FROM users WHERE users.tenant_id = tenants.id)"
+        ),
+        {"tid": DEFAULT_TENANT_ID},
+    )

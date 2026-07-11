@@ -10,7 +10,15 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from lyra.core.auth import hash_password
 from lyra.core.config import Settings
-from lyra.db.models import Document, DocumentVersion, SourceType, UserRole, VersionStatus
+from lyra.db.models import (
+    Collection,
+    Document,
+    DocumentVersion,
+    Source,
+    SourceType,
+    UserRole,
+    VersionStatus,
+)
 from lyra.db.repositories import (
     CollectionRepository,
     DocumentRepository,
@@ -21,7 +29,9 @@ from lyra.db.repositories import (
 pytestmark = pytest.mark.integration
 
 
-async def _make_document(session: AsyncSession, tenant_id: uuid.UUID) -> tuple[uuid.UUID, ...]:
+async def _make_document(
+    session: AsyncSession, tenant_id: uuid.UUID
+) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
     collection = await CollectionRepository(session).create(
         tenant_id, name=f"c-{uuid.uuid4().hex[:6]}", embedding_model="BAAI/bge-m3"
     )
@@ -93,7 +103,7 @@ async def test_concurrent_activation_single_active(
     maker = async_sessionmaker(engine, expire_on_commit=False)
 
     async with maker() as setup:
-        _, _, document_id = await _make_document(setup, tenant_id)
+        collection_id, source_id, document_id = await _make_document(setup, tenant_id)
         repo = DocumentRepository(setup)
         v1 = await repo.create_version(tenant_id, document_id=document_id, content_hash="c1")
         v2 = await repo.create_version(tenant_id, document_id=document_id, content_hash="c2")
@@ -126,6 +136,8 @@ async def test_concurrent_activation_single_active(
                 delete(DocumentVersion).where(DocumentVersion.document_id == document_id)
             )
             await check.execute(delete(Document).where(Document.id == document_id))
+            await check.execute(delete(Source).where(Source.id == source_id))
+            await check.execute(delete(Collection).where(Collection.id == collection_id))
             await check.commit()
     finally:
         await engine.dispose()
