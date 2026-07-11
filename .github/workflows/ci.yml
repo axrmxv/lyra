@@ -41,6 +41,25 @@ jobs:
 
   test-backend:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: lyra
+          POSTGRES_PASSWORD: lyra
+          POSTGRES_DB: lyra
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U lyra"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      LYRA_DB_HOST: localhost
+      LYRA_DB_USER: lyra
+      LYRA_DB_PASSWORD: lyra
+      LYRA_DB_NAME: lyra
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -50,6 +69,8 @@ jobs:
       - name: Install
         working-directory: backend
         run: pip install -e ".[dev]"
+      - name: Create test database
+        run: PGPASSWORD=lyra psql -h localhost -U lyra -d lyra -c "CREATE DATABASE lyra_test;"
       - name: Pytest
         working-directory: backend
         run: pytest -v

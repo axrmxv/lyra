@@ -17,7 +17,9 @@ logs:
 test: test-backend test-frontend
 
 test-backend:
-	$(COMPOSE) run --rm --no-deps api pytest
+	$(COMPOSE) up -d postgres
+	$(COMPOSE) exec -T postgres sh -c 'createdb -U $${POSTGRES_USER:-lyra} lyra_test 2>/dev/null || true'
+	$(COMPOSE) run --rm api pytest
 
 test-frontend:
 	$(COMPOSE) run --rm --no-deps frontend sh -c "npm install && npm test"
