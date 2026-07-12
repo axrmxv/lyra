@@ -18,6 +18,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from lyra.api import readiness
 from lyra.api.routes.admin import router as admin_router
 from lyra.api.routes.auth import router as auth_router
+from lyra.api.routes.documents import router as documents_router
+from lyra.api.routes.sources import router as sources_router
 from lyra.core.config import get_settings
 from lyra.core.errors import LyraError
 from lyra.core.logging import configure_logging
@@ -37,6 +39,8 @@ def create_app() -> FastAPI:
 
     app.include_router(auth_router, prefix="/api/v1")
     app.include_router(admin_router, prefix="/api/v1")
+    app.include_router(documents_router, prefix="/api/v1")
+    app.include_router(sources_router, prefix="/api/v1")
 
     @app.exception_handler(LyraError)
     async def lyra_error_handler(_request: Request, exc: LyraError) -> JSONResponse:

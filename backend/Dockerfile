@@ -12,6 +12,10 @@ RUN pip install --no-cache-dir ".[dev]"
 
 COPY tests ./tests
 
+# Данные (uploads, кэш токенайзера) — до USER app, чтобы volume
+# инициализировался с владельцем app, а не root
+RUN mkdir -p /data/uploads /data/hf && chown -R app /data
+
 USER app
 EXPOSE 8000
 

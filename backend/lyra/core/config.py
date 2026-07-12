@@ -28,6 +28,14 @@ class Settings(BaseSettings):
     embeddings_url: str = "http://embeddings:80"
     reranker_url: str = "http://reranker:80"
 
+    # Ingest (фаза 2)
+    upload_dir: str = "/data/uploads"
+    upload_max_bytes: int = 50 * 1024 * 1024  # FR-1
+    embedding_batch_size: int = 16
+    # Токенайзер bge-m3 из HF-кэша (volume hf_cache, общий с TEI)
+    hf_cache_dir: str = "/data/hf"
+    tokenizer_model: str = "BAAI/bge-m3"
+
     @property
     def database_dsn(self) -> str:
         return (

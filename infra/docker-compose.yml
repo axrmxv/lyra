@@ -13,6 +13,10 @@ services:
       - ./backend/tests:/app/tests
       - ./backend/migrations:/app/migrations
       - ./backend/alembic.ini:/app/alembic.ini
+      - uploads:/data/uploads
+      # Отдельный volume для токенайзера (не hf_cache): кэш TEI принадлежит
+      # root, а api/worker работают от app; tokenizer.json (~17МБ) качается один раз
+      - hf_tokenizer:/data/hf
     command: ["sh", "-c", "alembic upgrade head && exec uvicorn lyra.api.app:app --host 0.0.0.0 --port 8000 --reload"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
@@ -31,7 +35,10 @@ services:
     env_file: .env
     volumes:
       - ./backend/lyra:/app/lyra
-    command: ["celery", "-A", "lyra.workers.celery_app", "worker", "-Q", "ingest,sync,evals", "-l", "info"]
+      - uploads:/data/uploads
+      - hf_tokenizer:/data/hf
+    # -B: встроенный beat (расписание синхронизации и GC) — достаточно при одном воркере MVP
+    command: ["celery", "-A", "lyra.workers.celery_app", "worker", "-B", "-Q", "ingest,sync,evals", "-l", "info"]
     healthcheck:
       test: ["CMD-SHELL", "celery -A lyra.workers.celery_app inspect ping"]
       interval: 30s
@@ -124,6 +131,8 @@ services:
 
 volumes:
   pgdata:
+  uploads:
+  hf_tokenizer:
   ollama_models:
     name: ollama_models
   hf_cache:

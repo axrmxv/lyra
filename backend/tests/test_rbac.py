@@ -32,9 +32,34 @@ RBAC_MATRIX = [
     ("GET", "/api/v1/admin/collections", UserRole.ADMIN, None),
     ("POST", "/api/v1/admin/collections", UserRole.ADMIN, {"name": "c"}),
     ("PATCH", f"/api/v1/admin/collections/{uuid.uuid4()}", UserRole.ADMIN, {"name": "c2"}),
+    # Фаза 2: ingest-эндпоинты (docs/api-contract.md §2, §6)
+    ("GET", "/api/v1/documents", UserRole.VIEWER, None),
+    ("GET", f"/api/v1/documents/{uuid.uuid4()}", UserRole.VIEWER, None),
+    ("DELETE", f"/api/v1/documents/{uuid.uuid4()}", UserRole.EDITOR, None),
+    ("GET", "/api/v1/sources", UserRole.VIEWER, None),
+    ("GET", f"/api/v1/sources/{uuid.uuid4()}", UserRole.VIEWER, None),
+    ("PATCH", f"/api/v1/sources/{uuid.uuid4()}", UserRole.EDITOR, {"name": "s"}),
+    ("DELETE", f"/api/v1/sources/{uuid.uuid4()}", UserRole.EDITOR, None),
+    ("POST", f"/api/v1/sources/{uuid.uuid4()}/sync", UserRole.EDITOR, None),
+    ("GET", "/api/v1/ingest/jobs", UserRole.EDITOR, None),
+    ("GET", f"/api/v1/ingest/jobs/{uuid.uuid4()}", UserRole.EDITOR, None),
+    ("POST", "/api/v1/admin/reindex", UserRole.ADMIN, {"collection_id": str(uuid.uuid4())}),
 ]
 
 ROLES = [UserRole.VIEWER, UserRole.EDITOR, UserRole.ADMIN]
+
+
+@pytest.fixture(autouse=True)
+def no_celery_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Роуты ставят Celery-задачи; в тестах брокер недоступен — глушим delay."""
+    import lyra.workers.tasks.ingest as ingest_tasks
+
+    class FakeResult:
+        id = "fake-task-id"
+
+    for task_name in ("process_upload", "sync_source", "reindex_collection"):
+        task = getattr(ingest_tasks, task_name)
+        monkeypatch.setattr(task, "delay", lambda *a, **k: FakeResult())
 
 
 @pytest.fixture()

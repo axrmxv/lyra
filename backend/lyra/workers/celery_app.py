@@ -11,7 +11,7 @@ from lyra.core.config import get_settings
 
 settings = get_settings()
 
-celery_app = Celery("lyra", broker=settings.redis_url)
+celery_app = Celery("lyra", broker=settings.redis_url, include=["lyra.workers.tasks.ingest"])
 
 celery_app.conf.update(
     task_acks_late=True,
@@ -23,6 +23,16 @@ celery_app.conf.update(
     ),
     broker_connection_retry_on_startup=True,
     worker_prefetch_multiplier=1,
+    # Redis-брокер: unacked-задача погибшего воркера редоставляется через
+    # visibility_timeout. Дефолт 1ч → восстановление после SIGKILL слишком
+    # долгое; 600с безопасно, пока любая задача короче 10 минут
+    broker_transport_options={"visibility_timeout": 600},
+    beat_schedule={
+        # Тик раз в минуту; каждый источник сам решает по своему cron (croniter)
+        "sync-due-sources": {"task": "lyra.ingest.sync_due_sources", "schedule": 60.0},
+        # Отложенная чистка chunks у superseded-версий (data-model §3)
+        "gc-superseded": {"task": "lyra.ingest.gc_superseded", "schedule": 3600.0},
+    },
 )
 
 
