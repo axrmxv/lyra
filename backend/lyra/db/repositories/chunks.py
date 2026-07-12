@@ -26,8 +26,10 @@ class ChunkRepository(BaseRepository):
         statement = insert(Chunk).on_conflict_do_nothing(
             index_elements=["document_version_id", "ordinal"]
         )
-        result = await self.session.execute(statement, rows)
-        return cast(CursorResult[Any], result).rowcount or 0
+        # executemany через ORM возвращает IteratorResult без rowcount;
+        # точное число вставленных не нужно — конфликтные строки просто скипнуты
+        await self.session.execute(statement, rows)
+        return len(rows)
 
     async def count_for_version(self, tenant_id: uuid.UUID, version_id: uuid.UUID) -> int:
         total = await self.session.scalar(

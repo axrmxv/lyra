@@ -18,11 +18,13 @@ from lyra.api.schemas.admin import (
     UsersPage,
 )
 from lyra.api.schemas.auth import UserOut
+from lyra.api.schemas.ingest import ReindexRequest
 from lyra.core.auth import hash_password
 from lyra.core.constants import DEFAULT_TENANT_ID
 from lyra.core.errors import ConflictError, NotFoundError
 from lyra.db.models import UserRole
 from lyra.db.repositories import CollectionRepository, UserRepository
+from lyra.workers.tasks.ingest import reindex_collection
 
 router = APIRouter(
     prefix="/admin",
@@ -65,6 +67,16 @@ async def patch_user(user_id: uuid.UUID, body: UserPatch, session: SessionDep) -
         raise NotFoundError("Пользователь не найден")
     await session.commit()
     return UserOut.model_validate(user)
+
+
+@router.post("/reindex", status_code=202)
+async def reindex(body: ReindexRequest, session: SessionDep) -> dict[str, str]:
+    """Переиндексация коллекции: новые версии всех документов (api-contract §6)."""
+    collection = await CollectionRepository(session).get(DEFAULT_TENANT_ID, body.collection_id)
+    if collection is None:
+        raise NotFoundError("Коллекция не найдена")
+    reindex_collection.delay(str(body.collection_id))
+    return {"status": "queued", "collection_id": str(body.collection_id)}
 
 
 @router.get("/collections")

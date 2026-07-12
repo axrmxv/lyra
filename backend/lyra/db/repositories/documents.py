@@ -131,6 +131,19 @@ class DocumentRepository(BaseRepository):
             .values(active_version_id=version_id)
         )
 
+    async def list_versions(
+        self, tenant_id: uuid.UUID, document_id: uuid.UUID
+    ) -> list[DocumentVersion]:
+        result = await self.session.execute(
+            select(DocumentVersion)
+            .where(
+                DocumentVersion.tenant_id == tenant_id,
+                DocumentVersion.document_id == document_id,
+            )
+            .order_by(DocumentVersion.version)
+        )
+        return list(result.scalars())
+
     async def list(
         self,
         tenant_id: uuid.UUID,
