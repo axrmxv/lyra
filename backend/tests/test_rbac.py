@@ -44,6 +44,8 @@ RBAC_MATRIX = [
     ("GET", "/api/v1/ingest/jobs", UserRole.EDITOR, None),
     ("GET", f"/api/v1/ingest/jobs/{uuid.uuid4()}", UserRole.EDITOR, None),
     ("POST", "/api/v1/admin/reindex", UserRole.ADMIN, {"collection_id": str(uuid.uuid4())}),
+    # Фаза 3: retrieval (docs/api-contract.md §3)
+    ("POST", "/api/v1/search", UserRole.VIEWER, {"query": "тест", "rerank": False}),
 ]
 
 ROLES = [UserRole.VIEWER, UserRole.EDITOR, UserRole.ADMIN]
@@ -60,6 +62,23 @@ def no_celery_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
     for task_name in ("process_upload", "sync_source", "reindex_collection"):
         task = getattr(ingest_tasks, task_name)
         monkeypatch.setattr(task, "delay", lambda *a, **k: FakeResult())
+
+
+@pytest.fixture(autouse=True)
+def fast_search(monkeypatch: pytest.MonkeyPatch) -> None:
+    """RBAC-тесты /search не ходят в TEI: фейковый эмбеддер (пустая выдача — 200)."""
+
+    class FakeEmbeddings:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            pass
+
+        async def embed_one(self, text: str) -> list[float]:
+            return [0.0] * 1024
+
+        async def embed(self, texts: list[str]) -> list[list[float]]:
+            return [[0.0] * 1024 for _ in texts]
+
+    monkeypatch.setattr("lyra.retrieval.retriever.EmbeddingClient", FakeEmbeddings)
 
 
 @pytest.fixture()
