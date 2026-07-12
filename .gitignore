@@ -3,6 +3,10 @@
 .env.*
 !.env.example
 
+# Рабочие промпты генерации кода (локальный инструмент, не публикуются)
+prompts/
+PLAN.local.md
+
 # Python
 __pycache__/
 *.py[cod]
