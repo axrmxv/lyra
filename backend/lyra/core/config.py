@@ -28,6 +28,14 @@ class Settings(BaseSettings):
     embeddings_url: str = "http://embeddings:80"
     reranker_url: str = "http://reranker:80"
 
+    # Retrieval (фаза 3). Дефолты — для CPU-стенда (замерено: cross-encoder
+    # bge-reranker-v2-m3 на CPU ~0.3-0.5с/пару при 400-600 символах текста;
+    # 50 пар x 512 токенов из ADR-004 реалистичны только на GPU — там
+    # поднять top_n/max_chars и вернуть timeout 3с)
+    reranker_timeout_s: float = 15.0
+    rerank_top_n: int = 12  # кандидатов после RRF отправляется в reranker
+    rerank_text_max_chars: int = 600  # обрезка текста для скоринга (chunk не трогается)
+
     # Ingest (фаза 2)
     upload_dir: str = "/data/uploads"
     upload_max_bytes: int = 50 * 1024 * 1024  # FR-1
