@@ -8,9 +8,9 @@
 
 | Операция | MVP p50 | MVP p95 | Prod p50 | Prod p95 | Комментарий |
 |----------|---------|---------|----------|----------|-------------|
-| **Chat: полный ответ** (happy path, без corrective) | ≤ 8 с | ≤ 20 с | ≤ 2.5 с | ≤ 6 с | Доминирует LLM-инференс на CPU; SSE-стриминг скрывает часть ожидания |
+| **Chat: полный ответ** (happy path, без corrective) | ≤ 2 мин | ≤ 3 мин | ≤ 2.5 с | ≤ 6 с | Факт фазы 4 (CPU, 7B q4): 92 c happy (prompt eval ~40 c + генерация + self_check); исходная оценка 8 c реалистична только на GPU. SSE-стриминг скрывает часть ожидания |
 | Chat: **время до первого токена** | ≤ 4 с | ≤ 10 с | ≤ 1.2 с | ≤ 2.5 с | UX-критичная метрика: retrieval + grading + начало генерации |
-| Chat: worst case (2 corrective + self-check retry) | ≤ 25 с | ≤ 60 с | ≤ 8 с | ≤ 15 с | Ограничен жёсткими лимитами циклов ([ADR-006](adr/ADR-006-langgraph-topology.md)); дольше 60 с — таймаут и честная ошибка |
+| Chat: worst case (2 corrective + self-check retry) | ≤ 6 мин | ≤ 8 мин | ≤ 8 с | ≤ 15 с | Факт фазы 4: corrective-путь 313 c (4 вызова). Ограничен лимитами циклов ([ADR-006](adr/ADR-006-langgraph-topology.md)); верхняя эвристика grade (auto-accept по rerank-score) экономит 1-2 вызова на типовых вопросах |
 | **/search** (raw retrieval, с rerank) | ≤ 10 с | ≤ 12 с | ≤ 300 мс | ≤ 500 мс | Факт фазы 3 (smoke 20 запросов): p50 9.4 c / p95 10.3 c; доминирует CPU cross-encoder (top-12, обрезка 600 симв. — ADR-004); каналы ~16 мс, embed ~200 мс |
 | /search (без rerank / rerank degraded) | ≤ 700 мс | ≤ 1 с | ≤ 100 мс | ≤ 250 мс | Факт: p50 625 мс / p95 953 мс (BM25 + HNSW + RRF + embed запроса) |
 | Upload → 202 (постановка job) | ≤ 200 мс | ≤ 500 мс | — | — | Синхронная часть ingest минимальна (FR-2) |

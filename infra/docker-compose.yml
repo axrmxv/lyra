@@ -96,6 +96,12 @@ services:
 
   ollama:
     image: ollama/ollama
+    # OOM-kill ML-сервисов на CPU-стенде — реальность (см. фазу 4):
+    # unless-stopped возвращает сервис после падения; клиенты ретраят
+    restart: unless-stopped
+    environment:
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_MAX_LOADED_MODELS: "1"
     volumes:
       # Имя volume фиксировано: модели предзагружены до фазы 0 (prompts/phase-00)
       - ollama_models:/root/.ollama
@@ -110,6 +116,7 @@ services:
 
   embeddings:
     image: ghcr.io/huggingface/text-embeddings-inference:cpu-latest
+    restart: unless-stopped
     # max-batch-tokens ограничен: дефолт вызывает OOM (exit 137) на warmup
     # при CPU-инференсе в WSL2; 4096 достаточно для батчей ingest
     command: ["--model-id", "BAAI/bge-m3", "--max-batch-tokens", "4096", "--auto-truncate"]
@@ -122,6 +129,7 @@ services:
 
   reranker:
     image: ghcr.io/huggingface/text-embeddings-inference:cpu-latest
+    restart: unless-stopped
     command: ["--model-id", "BAAI/bge-reranker-v2-m3", "--max-batch-tokens", "4096", "--auto-truncate"]
     volumes:
       - hf_cache:/data
