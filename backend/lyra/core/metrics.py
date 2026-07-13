@@ -16,3 +16,12 @@ RETRIEVAL_DEGRADED = Counter(
     "lyra_retrieval_degraded_total",
     "Запросы с деградацией (reranker недоступен)",
 )
+
+# LLM-вызовы (FR-19, ADR-009): каждый вызов трейсится с узлом графа
+LLM_CALL_SECONDS = Histogram(
+    "lyra_llm_call_seconds",
+    "Длительность LLM-вызовов",
+    ["node", "model"],
+    buckets=(0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 30.0, 60.0),
+)
+LLM_TOKENS = Counter("lyra_llm_tokens_total", "Токены LLM-вызовов", ["node", "direction"])

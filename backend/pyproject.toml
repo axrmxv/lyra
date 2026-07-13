@@ -34,6 +34,7 @@ dependencies = [
     "croniter>=3.0",
     "python-multipart>=0.0.9",
     "mcp>=1.0",
+    "langgraph>=0.2",
 ]
 
 [project.optional-dependencies]
