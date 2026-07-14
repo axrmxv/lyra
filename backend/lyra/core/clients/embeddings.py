@@ -11,8 +11,11 @@ import structlog
 
 logger = structlog.get_logger(__name__)
 
-MAX_RETRIES = 5
+# Окно ретраев перекрывает рестарт TEI после OOM-kill (~90-120с c загрузкой
+# модели; restart: unless-stopped в compose): 1+2+4+8+16+30+30+30 ≈ 121с
+MAX_RETRIES = 8
 BACKOFF_BASE_S = 1.0
+BACKOFF_CAP_S = 30.0
 
 
 class EmbeddingError(Exception):
@@ -50,7 +53,7 @@ class EmbeddingClient:
                 return data
             except (httpx.HTTPError, ValueError) as exc:
                 last_error = exc
-                delay = BACKOFF_BASE_S * 2**attempt
+                delay = min(BACKOFF_BASE_S * 2**attempt, BACKOFF_CAP_S)
                 logger.warning(
                     "embedding_retry", attempt=attempt + 1, delay_s=delay, error=str(exc)
                 )

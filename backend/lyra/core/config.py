@@ -36,6 +36,29 @@ class Settings(BaseSettings):
     rerank_top_n: int = 12  # кандидатов после RRF отправляется в reranker
     rerank_text_max_chars: int = 600  # обрезка текста для скоринга (chunk не трогается)
 
+    # RAG-граф (фаза 4, ADR-006/007/009)
+    generation_model: str = "qwen2.5:7b-instruct-q4_K_M"
+    grading_model: str = "qwen2.5:7b-instruct-q4_K_M"  # grading можно перевести на меньшую
+    llm_timeout_s: float = 300.0  # CPU: prompt eval ~1мин + генерация ~5-15 ток/c
+    # KV-кэш Ollama пропорционален num_ctx; дефолт модели (32k) выедает память
+    # CPU-стенда (OOM embeddings). 16k = рабочий лимит context-management §2
+    llm_num_ctx: int = 16384
+    rag_top_k: int = 8  # chunks в контекст генерации (context-management §2)
+    # Эвристики grade_sufficiency до LLM-judge (ADR-006)
+    sufficiency_min_candidates: int = 3
+    sufficiency_min_rerank_score: float = 0.02
+    # Верхняя эвристика: cross-encoder уверен (score ≥ порога) → sufficient
+    # без LLM-judge. Точнее капризов 7B-судьи и экономит 40-50с CPU-вызова
+    sufficiency_auto_accept_score: float = 0.6
+    # Бюджеты контекста в токенах (context-management §2; приближение
+    # токенайзером bge-m3 — chunks несут token_count)
+    ctx_budget_system: int = 1000
+    ctx_budget_history: int = 2000
+    ctx_budget_chunks: int = 8000
+    # 800 вместо 2000 из context-management §2: фактические ответы ~100-300
+    # токенов, а на CPU каждый токен ~0.1-0.2с — верхняя граница бережёт p95
+    ctx_budget_completion: int = 800
+
     # Ingest (фаза 2)
     upload_dir: str = "/data/uploads"
     upload_max_bytes: int = 50 * 1024 * 1024  # FR-1
