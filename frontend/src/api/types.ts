@@ -86,11 +86,7 @@ export interface MessageListResponse {
 
 // SSE-события POST /chat/sessions/{id}/messages
 export type ChatStage =
-  | 'retrieving'
-  | 'grading'
-  | 'corrective_retrieve'
-  | 'generating'
-  | 'self_check'
+  'retrieving' | 'grading' | 'corrective_retrieve' | 'generating' | 'self_check'
 
 export interface StatusEvent {
   stage: ChatStage
@@ -140,12 +136,7 @@ export interface UploadResponse {
 }
 
 export type IngestJobStatus =
-  | 'queued'
-  | 'processing'
-  | 'completed'
-  | 'failed'
-  | 'failed_pii'
-  | 'skipped_duplicate'
+  'queued' | 'processing' | 'completed' | 'failed' | 'failed_pii' | 'skipped_duplicate'
 
 export interface IngestJob {
   id: string
