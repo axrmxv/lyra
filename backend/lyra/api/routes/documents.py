@@ -6,11 +6,18 @@ Celery-задачу (FR-2) — парсинг/эмбеддинг в API-проц
 
 import os
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, UploadFile
+from fastapi import APIRouter, Depends, Form, UploadFile
 
 from lyra.api.deps import SessionDep, require_role
-from lyra.api.schemas.ingest import DocumentDetail, DocumentOut, UploadAccepted, VersionOut
+from lyra.api.schemas.ingest import (
+    DocumentDetail,
+    DocumentOut,
+    DocumentsPage,
+    UploadAccepted,
+    VersionOut,
+)
 from lyra.core.config import get_settings
 from lyra.core.constants import DEFAULT_TENANT_ID
 from lyra.core.errors import LyraError, NotFoundError
@@ -38,7 +45,10 @@ class UnsupportedFileType(LyraError):
     dependencies=[Depends(require_role(UserRole.EDITOR))],
 )
 async def upload_document(
-    file: UploadFile, collection_id: uuid.UUID, session: SessionDep
+    file: UploadFile,
+    # multipart-поле по api-contract §2 (было query-параметром — отступление фазы 2)
+    collection_id: Annotated[uuid.UUID, Form()],
+    session: SessionDep,
 ) -> UploadAccepted:
     settings = get_settings()
     content = await file.read()
@@ -92,11 +102,13 @@ async def list_documents(
     source_id: uuid.UUID | None = None,
     limit: int = 50,
     offset: int = 0,
-) -> list[DocumentOut]:
-    documents = await DocumentRepository(session).list(
-        DEFAULT_TENANT_ID, source_id=source_id, limit=limit, offset=offset
-    )
-    return [DocumentOut.model_validate(d) for d in documents]
+) -> DocumentsPage:
+    # Пагинация items/total — преамбула api-contract; голый список был
+    # отступлением фазы 2 от контракта
+    repo = DocumentRepository(session)
+    documents = await repo.list(DEFAULT_TENANT_ID, source_id=source_id, limit=limit, offset=offset)
+    total = await repo.count(DEFAULT_TENANT_ID, source_id=source_id)
+    return DocumentsPage(items=[DocumentOut.model_validate(d) for d in documents], total=total)
 
 
 @router.get("/documents/{document_id}", dependencies=[Depends(require_role(UserRole.VIEWER))])
