@@ -6,8 +6,8 @@ self_check-fail). Худший случай — 10 LLM-вызовов, happy pat
 """
 
 import time
-from functools import partial
-from typing import Any
+from collections.abc import Awaitable, Callable, Coroutine
+from typing import Any, Protocol
 
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
@@ -26,6 +26,31 @@ from lyra.rag.state import AnswerPayload, RagState
 
 MAX_CORRECTIVE = 2  # ADR-006
 MAX_GENERATE_RETRIES = 1  # ADR-006
+
+NodeFn = Callable[["RagState", "GraphDeps"], Awaitable["RagState"]]
+
+
+class BoundNode(Protocol):
+    """Сигнатура узла для langgraph._Node: параметр обязан называться state."""
+
+    def __call__(self, state: RagState) -> Coroutine[Any, Any, RagState]: ...
+
+
+# Стадия SSE-события status при входе в узел (api-contract §4). condense
+# предшествует retrieve всегда — стадия retrieving закреплена за ним,
+# чтобы UI получал прогресс с первого LLM-вызова; retrieve не эмитит.
+STAGE_BY_NODE: dict[str, str | None] = {
+    "condense_question": "retrieving",
+    "retrieve": None,
+    "grade_sufficiency": "grading",
+    "corrective_retrieve": "corrective_retrieve",
+    "generate": "generating",
+    "retry_generate": "generating",
+    "cite": None,
+    "self_check": "self_check",
+    "honest_fallback": None,
+    "finalize": None,
+}
 
 
 async def finalize(state: RagState, deps: GraphDeps) -> RagState:
@@ -77,18 +102,30 @@ async def _retry_generate(state: RagState, deps: GraphDeps) -> RagState:
     return await generate(state, deps)
 
 
+def _bind(name: str, fn: NodeFn, deps: GraphDeps) -> BoundNode:
+    """Узел + SSE-статус при входе (стадии не дублируются — карта выше)."""
+    stage = STAGE_BY_NODE[name]
+
+    async def node(state: RagState) -> RagState:
+        if stage is not None:
+            await deps.sink.emit_status(stage)
+        return await fn(state, deps)
+
+    return node
+
+
 def build_graph(deps: GraphDeps) -> CompiledStateGraph[RagState, Any, Any, Any]:
     graph = StateGraph(RagState)
-    graph.add_node("condense_question", partial(condense_question, deps=deps))
-    graph.add_node("retrieve", partial(retrieve, deps=deps))
-    graph.add_node("grade_sufficiency", partial(grade_sufficiency, deps=deps))
-    graph.add_node("corrective_retrieve", partial(corrective_retrieve, deps=deps))
-    graph.add_node("generate", partial(generate, deps=deps))
-    graph.add_node("retry_generate", partial(_retry_generate, deps=deps))
-    graph.add_node("cite", partial(cite, deps=deps))
-    graph.add_node("self_check", partial(self_check, deps=deps))
-    graph.add_node("honest_fallback", partial(honest_fallback, deps=deps))
-    graph.add_node("finalize", partial(finalize, deps=deps))
+    graph.add_node("condense_question", _bind("condense_question", condense_question, deps))
+    graph.add_node("retrieve", _bind("retrieve", retrieve, deps))
+    graph.add_node("grade_sufficiency", _bind("grade_sufficiency", grade_sufficiency, deps))
+    graph.add_node("corrective_retrieve", _bind("corrective_retrieve", corrective_retrieve, deps))
+    graph.add_node("generate", _bind("generate", generate, deps))
+    graph.add_node("retry_generate", _bind("retry_generate", _retry_generate, deps))
+    graph.add_node("cite", _bind("cite", cite, deps))
+    graph.add_node("self_check", _bind("self_check", self_check, deps))
+    graph.add_node("honest_fallback", _bind("honest_fallback", honest_fallback, deps))
+    graph.add_node("finalize", _bind("finalize", finalize, deps))
 
     graph.set_entry_point("condense_question")
     graph.add_edge("condense_question", "retrieve")

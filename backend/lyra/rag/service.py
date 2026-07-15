@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from lyra.core.clients.llm import LLMClient, OllamaClient
 from lyra.core.config import Settings
 from lyra.rag.deps import GraphDeps
+from lyra.rag.events import EventSink, NullSink
 from lyra.rag.graph import run_graph
 from lyra.rag.state import AnswerPayload, RagState
 from lyra.retrieval.retriever import HybridRetriever
@@ -18,6 +19,7 @@ def build_deps(
     *,
     llm: LLMClient | None = None,
     retriever: HybridRetriever | None = None,
+    sink: EventSink | None = None,
 ) -> GraphDeps:
     return GraphDeps(
         retriever=retriever or HybridRetriever(session_factory, settings),
@@ -30,6 +32,7 @@ def build_deps(
             num_ctx=settings.llm_num_ctx,
         ),
         settings=settings,
+        sink=sink or NullSink(),
     )
 
 

@@ -98,6 +98,27 @@ class FakeLLM:
         return obj, LLMResult(text="{}", prompt_tokens=10, completion_tokens=5)
 
 
+class RecordingSink:
+    """Пишет события графа в список — проверка порядка status/token."""
+
+    def __init__(self) -> None:
+        self.events: list[tuple[str, str]] = []
+
+    async def emit_status(self, stage: str) -> None:
+        self.events.append(("status", stage))
+
+    async def emit_token(self, text: str) -> None:
+        self.events.append(("token", text))
+
+    @property
+    def stages(self) -> list[str]:
+        return [payload for kind, payload in self.events if kind == "status"]
+
+    @property
+    def tokens(self) -> list[str]:
+        return [payload for kind, payload in self.events if kind == "token"]
+
+
 class FakeRetriever:
     """Очередь результатов: каждый вызов retrieve отдаёт следующий список chunks."""
 

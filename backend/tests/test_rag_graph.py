@@ -10,9 +10,10 @@ from typing import Any
 
 from lyra.core.config import Settings
 from lyra.rag.deps import GraphDeps
+from lyra.rag.events import NullSink
 from lyra.rag.graph import run_graph
 from lyra.rag.state import RagState, SelfCheckResult, Sufficiency
-from tests.rag_fakes import FakeLLM, FakeRetriever, make_chunk
+from tests.rag_fakes import FakeLLM, FakeRetriever, RecordingSink, make_chunk
 
 TENANT = uuid.uuid4()
 
@@ -22,9 +23,19 @@ GOOD_CHUNKS = [make_chunk(f"Отпуск составляет 28 дней, пу�
 WEAK_CHUNKS = [make_chunk("нерелевантный текст")]
 
 
-def deps_with(llm: FakeLLM, retriever: FakeRetriever, **overrides: Any) -> GraphDeps:
+def deps_with(
+    llm: FakeLLM,
+    retriever: FakeRetriever,
+    sink: RecordingSink | NullSink | None = None,
+    **overrides: Any,
+) -> GraphDeps:
     settings = Settings(_env_file=None).model_copy(update=overrides)
-    return GraphDeps(retriever=retriever, llm=llm, settings=settings)  # type: ignore[arg-type]
+    return GraphDeps(
+        retriever=retriever,  # type: ignore[arg-type]
+        llm=llm,
+        settings=settings,
+        sink=sink or NullSink(),
+    )
 
 
 def state(question: str = "Сколько дней отпуска?", **kwargs: Any) -> RagState:
@@ -164,6 +175,47 @@ async def test_worst_case_llm_calls_within_limit() -> None:
     assert result.final is not None and result.final.refusal
     # 1 condense + 3 grade + 2 rewrite + 2 generate + 2 self_check = 10 (ADR-006)
     assert result.final.usage.llm_calls == 10
+
+
+async def test_event_order_happy_path() -> None:
+    """SSE-контракт api-contract §4: status-стадии по порядку, токены при generating."""
+    llm = FakeLLM(
+        chat_responses={"generate": ["Отпуск составляет 28 дней [1]."]},
+        structured_responses={
+            "grade_sufficiency": [Sufficiency(sufficient=True, score=0.9)],
+            "self_check": [SelfCheckResult(passed=True)],
+        },
+    )
+    sink = RecordingSink()
+    result = await run_graph(state(), deps_with(llm, FakeRetriever([GOOD_CHUNKS]), sink))
+    assert sink.stages == ["retrieving", "grading", "generating", "self_check"]
+    assert result.final is not None
+    assert "".join(sink.tokens).strip() == result.final.answer
+    # Токены — строго после статуса generating и до self_check
+    kinds = [kind for kind, _ in sink.events]
+    first_token = kinds.index("token")
+    assert sink.events[first_token - 1] == ("status", "generating")
+    assert kinds[first_token:].count("status") == 1  # только self_check после токенов
+
+
+async def test_event_order_corrective_and_refusal() -> None:
+    """corrective_retrieve эмитится как стадия; refusal-путь — без токенов."""
+    llm = FakeLLM(
+        chat_responses={"corrective_retrieve": ["вариант 2", "вариант 3"]},
+        structured_responses={},
+    )
+    sink = RecordingSink()
+    retriever = FakeRetriever([WEAK_CHUNKS, WEAK_CHUNKS, WEAK_CHUNKS])
+    await run_graph(state("Вне корпуса?"), deps_with(llm, retriever, sink))
+    assert sink.stages == [
+        "retrieving",
+        "grading",
+        "corrective_retrieve",
+        "grading",
+        "corrective_retrieve",
+        "grading",
+    ]
+    assert sink.tokens == []  # honest_fallback не стримит
 
 
 async def test_degraded_flag_propagates() -> None:
