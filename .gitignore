@@ -8,6 +8,7 @@
 # RAG-графа) обязаны попадать в репозиторий!
 /prompts/
 PLAN.local.md
+HANDOFF.local.md
 
 # Python
 __pycache__/
