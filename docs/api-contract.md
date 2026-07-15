@@ -5,6 +5,7 @@ REST API FastAPI, префикс `/api/v1`. Все схемы — Pydantic v2, O
 **Общие правила**
 - Аутентификация: `Authorization: Bearer <JWT>`. Роли: `viewer` ≤ `editor` ≤ `admin`; минимальная роль указана у каждого эндпоинта.
 - Ошибки — единый формат: `{"error": {"code": "string", "message": "string", "details": {}}}`, HTTP-коды: 400 валидация, 401/403 доступ, 404, 409 конфликт, 422 семантика, 429 rate limit, 503 деградация (LLM/зависимость недоступна).
+- 429 всегда несёт заголовок `Retry-After` (секунды); коды: `rate_limited` (лимит запросов: /chat — per-user, /auth/login — per-IP), `overloaded` (заняты все слоты одновременных генераций LLM).
 - Все ответы содержат заголовок `X-Trace-Id`.
 - Пагинация: `?limit=&offset=`, ответ `{"items": [...], "total": int}`.
 
@@ -93,7 +94,23 @@ REST API FastAPI, префикс `/api/v1`. Все схемы — Pydantic v2, O
 Создать сессию → `{"session_id": "uuid"}`.
 
 ### GET /chat/sessions / GET /chat/sessions/{id}/messages — viewer
-История своих сессий.
+История своих сессий (чужая сессия → 403, несуществующая → 404).
+
+```json
+// GET /chat/sessions → 200
+{"items": [{"id": "uuid", "title": "Сколько дней отпуска?", "created_at": "..."}], "total": 1}
+// GET /chat/sessions/{id}/messages → 200
+{"items": [
+  {"id": "uuid", "role": "user", "content": "...", "confidence": null,
+   "refusal": false, "created_at": "...", "citations": []},
+  {"id": "uuid", "role": "assistant", "content": "... [1]",
+   "confidence": {"label": "high", "score": 0.87}, "refusal": false, "created_at": "...",
+   "citations": [{"id": 1, "chunk_id": "uuid", "document_id": "uuid",
+                  "document_title": "...", "url": "...", "quote": "...",
+                  "relevance_score": 0.93}]}
+ ], "total": 2}
+```
+`refusal` — признак честного отказа (для отдельного рендера в истории); после GC-чистки chunks `chunk_id`/метаданные цитаты могут быть null, quote сохраняется.
 
 ### POST /chat/sessions/{id}/messages — viewer, **SSE**
 ```json

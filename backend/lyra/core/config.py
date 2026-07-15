@@ -59,6 +59,15 @@ class Settings(BaseSettings):
     # токенов, а на CPU каждый токен ~0.1-0.2с — верхняя граница бережёт p95
     ctx_budget_completion: int = 800
 
+    # Chat API (фаза 5): rate limiting и очередь к Ollama (nfr §2,
+    # security-and-access §7 — защита локальной LLM от случайного DoS)
+    rate_limit_chat_per_minute: int = 10
+    rate_limit_login_per_minute: int = 5
+    llm_max_concurrency: int = 2  # одновременных генераций; переполнение → 429
+    llm_overload_retry_after_s: int = 30  # Retry-After при занятом семафоре
+    chat_history_messages: int = 10  # хвост истории сессии в контекст графа
+    cors_origins: str = "http://localhost:5173"  # origin фронтенда, через запятую
+
     # Ingest (фаза 2)
     upload_dir: str = "/data/uploads"
     upload_max_bytes: int = 50 * 1024 * 1024  # FR-1
@@ -66,6 +75,10 @@ class Settings(BaseSettings):
     # Токенайзер bge-m3 из HF-кэша (volume hf_cache, общий с TEI)
     hf_cache_dir: str = "/data/hf"
     tokenizer_model: str = "BAAI/bge-m3"
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
     @property
     def database_dsn(self) -> str:

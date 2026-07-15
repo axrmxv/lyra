@@ -17,7 +17,7 @@ from lyra.api.app import create_app
 from lyra.core.auth import create_access_token, hash_password
 from lyra.core.config import Settings, get_settings
 from lyra.core.constants import DEFAULT_TENANT_ID
-from lyra.db.models import User, UserRole
+from lyra.db.models import ChatSession, User, UserRole
 from lyra.db.repositories import UserRepository
 from lyra.db.session import get_engine, get_sessionmaker
 
@@ -46,6 +46,18 @@ RBAC_MATRIX = [
     ("POST", "/api/v1/admin/reindex", UserRole.ADMIN, {"collection_id": str(uuid.uuid4())}),
     # Фаза 3: retrieval (docs/api-contract.md §3)
     ("POST", "/api/v1/search", UserRole.VIEWER, {"query": "тест", "rerank": False}),
+    # Фаза 5: chat и feedback (docs/api-contract.md §4-5)
+    ("POST", "/api/v1/chat/sessions", UserRole.VIEWER, None),
+    ("GET", "/api/v1/chat/sessions", UserRole.VIEWER, None),
+    ("GET", f"/api/v1/chat/sessions/{uuid.uuid4()}/messages", UserRole.VIEWER, None),
+    ("POST", f"/api/v1/chat/sessions/{uuid.uuid4()}/messages", UserRole.VIEWER, {"content": "т"}),
+    (
+        "POST",
+        "/api/v1/feedback",
+        UserRole.VIEWER,
+        {"message_id": str(uuid.uuid4()), "rating": "up"},
+    ),
+    ("GET", "/api/v1/feedback", UserRole.ADMIN, None),
 ]
 
 ROLES = [UserRole.VIEWER, UserRole.EDITOR, UserRole.ADMIN]
@@ -114,8 +126,10 @@ async def users_by_role(migrated_db: Settings) -> AsyncIterator[dict[UserRole, U
         await session.commit()
     yield created
     async with maker() as session:
-        for user in created.values():
-            await session.execute(delete(User).where(User.id == user.id))
+        user_ids = [user.id for user in created.values()]
+        # POST /chat/sessions в матрице создаёт сессии — чистим до users (FK)
+        await session.execute(delete(ChatSession).where(ChatSession.user_id.in_(user_ids)))
+        await session.execute(delete(User).where(User.id.in_(user_ids)))
         await session.commit()
     await engine.dispose()
 
