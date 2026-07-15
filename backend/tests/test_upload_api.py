@@ -95,8 +95,9 @@ async def test_upload_accepted_and_dispatched(
 ) -> None:
     client: AsyncClient = env["client"]  # type: ignore[assignment]
     response = await client.post(
-        f"/api/v1/documents/upload?collection_id={env['collection_id']}",
+        "/api/v1/documents/upload",
         files={"file": ("политика.md", "# Отпуск\n\n28 дней.".encode(), "text/markdown")},
+        data={"collection_id": str(env["collection_id"])},
         headers=env["headers"],  # type: ignore[arg-type]
     )
     assert response.status_code == 202, response.text
@@ -128,8 +129,9 @@ async def test_upload_too_large_413(
     get_settings.cache_clear()
     client: AsyncClient = env["client"]  # type: ignore[assignment]
     response = await client.post(
-        f"/api/v1/documents/upload?collection_id={env['collection_id']}",
+        "/api/v1/documents/upload",
         files={"file": ("big.txt", b"x" * 100, "text/plain")},
+        data={"collection_id": str(env["collection_id"])},
         headers=env["headers"],  # type: ignore[arg-type]
     )
     assert response.status_code == 413
@@ -141,8 +143,9 @@ async def test_upload_unsupported_type_415(
 ) -> None:
     client: AsyncClient = env["client"]  # type: ignore[assignment]
     response = await client.post(
-        f"/api/v1/documents/upload?collection_id={env['collection_id']}",
+        "/api/v1/documents/upload",
         files={"file": ("virus.zip", b"PK\x03\x04payload", "application/zip")},
+        data={"collection_id": str(env["collection_id"])},
         headers=env["headers"],  # type: ignore[arg-type]
     )
     assert response.status_code == 415
@@ -152,7 +155,8 @@ async def test_upload_unsupported_type_415(
 async def test_upload_requires_editor(env: dict[str, object]) -> None:
     client: AsyncClient = env["client"]  # type: ignore[assignment]
     response = await client.post(
-        f"/api/v1/documents/upload?collection_id={env['collection_id']}",
+        "/api/v1/documents/upload",
         files={"file": ("a.txt", b"text", "text/plain")},
+        data={"collection_id": str(env["collection_id"])},
     )
     assert response.status_code == 401

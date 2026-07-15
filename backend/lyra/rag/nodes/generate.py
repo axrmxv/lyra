@@ -74,7 +74,7 @@ async def generate(state: RagState, deps: GraphDeps) -> RagState:
         }
     )
 
-    # chat_stream: тот же путь, что будет стримить фаза 5; здесь аккумулируем
+    # Токены уходят в SSE по мере генерации (sink; NullSink вне chat-API)
     pieces: list[str] = []
     async for piece in deps.llm.chat_stream(
         messages,
@@ -83,5 +83,6 @@ async def generate(state: RagState, deps: GraphDeps) -> RagState:
         on_usage=state.bump_usage,
     ):
         pieces.append(piece)
+        await deps.sink.emit_token(piece)
     state.draft_answer = "".join(pieces).strip()
     return state

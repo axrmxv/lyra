@@ -87,6 +87,11 @@ class DocumentOut(BaseModel):
     created_at: datetime
 
 
+class DocumentsPage(BaseModel):
+    items: list[DocumentOut]
+    total: int
+
+
 class VersionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

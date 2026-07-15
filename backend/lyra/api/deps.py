@@ -15,7 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from lyra.core.auth import decode_access_token, role_satisfies
 from lyra.core.config import get_settings
 from lyra.core.constants import DEFAULT_TENANT_ID
-from lyra.core.errors import ForbiddenError, UnauthorizedError
+from lyra.core.errors import ForbiddenError, RateLimitError, UnauthorizedError
+from lyra.core.ratelimit import get_rate_limiter
 from lyra.db.models import User, UserRole
 from lyra.db.repositories import UserRepository
 from lyra.db.session import get_session
@@ -55,3 +56,28 @@ def require_role(minimum: UserRole) -> Callable[[User], User]:
         return user
 
     return dependency
+
+
+async def chat_rate_limit(user: CurrentUserDep) -> None:
+    """Per-user лимит /chat (security-and-access §7): 429 + Retry-After."""
+    decision = await get_rate_limiter().hit(
+        f"rl:chat:{user.id}", get_settings().rate_limit_chat_per_minute
+    )
+    if not decision.allowed:
+        raise RateLimitError(
+            "Слишком много запросов к чату, попробуйте позже",
+            retry_after_s=decision.retry_after_s,
+        )
+
+
+async def login_rate_limit(request: Request) -> None:
+    """Per-IP лимит /auth/login — защита от перебора паролей."""
+    client_ip = request.client.host if request.client else "unknown"
+    decision = await get_rate_limiter().hit(
+        f"rl:login:{client_ip}", get_settings().rate_limit_login_per_minute
+    )
+    if not decision.allowed:
+        raise RateLimitError(
+            "Слишком много попыток входа, попробуйте позже",
+            retry_after_s=decision.retry_after_s,
+        )

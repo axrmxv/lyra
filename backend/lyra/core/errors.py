@@ -35,3 +35,20 @@ class ForbiddenError(LyraError):
 class ConflictError(LyraError):
     code = "conflict"
     status_code = 409
+
+
+class RateLimitError(LyraError):
+    """429 c Retry-After (api-contract, преамбула; nfr §2)."""
+
+    code = "rate_limited"
+    status_code = 429
+
+    def __init__(self, message: str, *, retry_after_s: int) -> None:
+        super().__init__(message, details={"retry_after_s": retry_after_s})
+        self.retry_after_s = retry_after_s
+
+
+class OverloadedError(RateLimitError):
+    """Семафор одновременных генераций занят — тоже 429, но свой code."""
+
+    code = "overloaded"

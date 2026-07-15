@@ -8,7 +8,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 
 from lyra.db.models import Document, DocumentVersion, VersionStatus
 from lyra.db.repositories.base import BaseRepository
@@ -159,3 +159,10 @@ class DocumentRepository(BaseRepository):
             query.order_by(Document.created_at.desc()).limit(limit).offset(offset)
         )
         return list(result.scalars())
+
+    async def count(self, tenant_id: uuid.UUID, *, source_id: uuid.UUID | None = None) -> int:
+        query = select(func.count()).select_from(Document).where(Document.tenant_id == tenant_id)
+        if source_id is not None:
+            query = query.where(Document.source_id == source_id)
+        result = await self.session.execute(query)
+        return int(result.scalar_one())

@@ -1,8 +1,8 @@
 """POST /auth/login, GET /auth/me (docs/api-contract.md §1)."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
-from lyra.api.deps import CurrentUserDep, SessionDep
+from lyra.api.deps import CurrentUserDep, SessionDep, login_rate_limit
 from lyra.api.schemas.auth import LoginRequest, LoginResponse, UserOut
 from lyra.core.auth import create_access_token, verify_password
 from lyra.core.config import get_settings
@@ -13,7 +13,7 @@ from lyra.db.repositories import UserRepository
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/login")
+@router.post("/login", dependencies=[Depends(login_rate_limit)])
 async def login(body: LoginRequest, session: SessionDep) -> LoginResponse:
     user = await UserRepository(session).get_by_email(DEFAULT_TENANT_ID, body.email)
     # Единое сообщение для "нет пользователя" и "неверный пароль" — не раскрываем,

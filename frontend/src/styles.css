@@ -1,0 +1,505 @@
+/* LYRA — базовые стили MVP (без CSS-фреймворка). */
+
+:root {
+  --bg: #f5f6f8;
+  --panel: #ffffff;
+  --border: #dfe3e8;
+  --text: #1c2430;
+  --muted: #6b7684;
+  --accent: #3557b7;
+  --accent-soft: #e8edfa;
+  --danger: #b3362c;
+  --danger-soft: #fbeae8;
+  --warn-soft: #fdf3dd;
+  --ok: #1f7a3d;
+  --radius: 10px;
+  font-family: system-ui, 'Segoe UI', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+/* --- Каркас --- */
+
+.layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.6rem 1.2rem;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.topbar-brand {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.topbar nav {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.topbar nav a {
+  padding: 0.35rem 0.8rem;
+  border-radius: var(--radius);
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.topbar nav a.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.topbar-user {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.layout-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+/* --- Кнопки/формы --- */
+
+.btn {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 0.45rem 0.9rem;
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 0.8rem;
+}
+
+.field input,
+.field textarea {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.7rem;
+}
+
+.field span {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* --- Логин --- */
+
+.login-wrap {
+  margin: auto;
+  width: min(360px, 90vw);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2rem;
+}
+
+/* --- Чат --- */
+
+.chat-page {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.chat-sidebar {
+  width: 260px;
+  border-right: 1px solid var(--border);
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  padding: 0.8rem;
+  gap: 0.5rem;
+  overflow-y: auto;
+}
+
+.chat-session-item {
+  text-align: left;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: var(--radius);
+  padding: 0.5rem 0.7rem;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-session-item.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.chat-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.bubble {
+  max-width: 46rem;
+  border-radius: var(--radius);
+  padding: 0.8rem 1rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.bubble-user {
+  align-self: flex-end;
+  background: var(--accent);
+  color: #fff;
+}
+
+.bubble-assistant {
+  align-self: flex-start;
+  background: var(--panel);
+  border: 1px solid var(--border);
+}
+
+.bubble-refusal {
+  border-left: 4px solid var(--danger);
+  background: var(--danger-soft);
+}
+
+.bubble-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.55rem;
+}
+
+.degraded-note {
+  font-size: 0.82rem;
+  background: var(--warn-soft);
+  border-radius: var(--radius);
+  padding: 0.2rem 0.6rem;
+}
+
+.nearest-docs {
+  margin: 0.5rem 0 0;
+  padding-left: 1.2rem;
+  font-size: 0.9rem;
+}
+
+.stage-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.stage-indicator::before {
+  content: '';
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1.2s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.chat-input {
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.9rem 1.2rem;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.chat-input textarea {
+  flex: 1;
+  resize: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.55rem 0.8rem;
+  min-height: 2.6rem;
+  max-height: 8rem;
+}
+
+/* --- Цитаты --- */
+
+.citation-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.3rem;
+  margin: 0 0.12rem;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 600;
+  vertical-align: baseline;
+  position: relative;
+}
+
+.citation-anchor {
+  position: relative;
+  display: inline-block;
+}
+
+.citation-popover {
+  position: absolute;
+  bottom: calc(100% + 0.45rem);
+  left: 0;
+  z-index: 20;
+  width: min(24rem, 80vw);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 24px rgba(28, 36, 48, 0.16);
+  padding: 0.8rem 0.9rem;
+  font-size: 0.88rem;
+  white-space: normal;
+  text-align: left;
+  color: var(--text);
+}
+
+.citation-popover blockquote {
+  margin: 0.4rem 0;
+  padding-left: 0.7rem;
+  border-left: 3px solid var(--accent);
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* --- Бейджи --- */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  padding: 0.15rem 0.6rem;
+  border: 1px solid var(--border);
+}
+
+.badge-high {
+  color: var(--ok);
+  border-color: currentColor;
+}
+
+.badge-medium {
+  color: #9a6b00;
+  border-color: currentColor;
+}
+
+.badge-low {
+  color: var(--danger);
+  border-color: currentColor;
+}
+
+/* --- Фидбек --- */
+
+.feedback {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.feedback button {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 0.15rem 0.5rem;
+}
+
+.feedback-form {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  width: 100%;
+}
+
+.feedback-form textarea {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.4rem 0.6rem;
+  resize: none;
+}
+
+/* --- Страницы данных --- */
+
+.page {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.1rem 1.3rem;
+}
+
+.panel h2 {
+  margin: 0 0 0.8rem;
+  font-size: 1.05rem;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.data-table th,
+.data-table td {
+  text-align: left;
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.data-table th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.status-pill {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.1rem 0.6rem;
+  font-size: 0.8rem;
+  border: 1px solid var(--border);
+}
+
+.status-completed {
+  color: var(--ok);
+  border-color: currentColor;
+}
+
+.status-failed,
+.status-failed_pii,
+.status-error {
+  color: var(--danger);
+  border-color: currentColor;
+}
+
+.status-processing,
+.status-queued {
+  color: #9a6b00;
+  border-color: currentColor;
+}
+
+.dropzone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 2rem;
+  text-align: center;
+  color: var(--muted);
+}
+
+.dropzone.dragover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* --- Тосты --- */
+
+.toasts {
+  position: fixed;
+  bottom: 1.2rem;
+  right: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  z-index: 50;
+}
+
+.toast {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 0.7rem 1rem;
+  min-width: 240px;
+  box-shadow: 0 6px 24px rgba(28, 36, 48, 0.16);
+}
+
+.toast-error {
+  border-left-color: var(--danger);
+}
+
+.empty-note {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
