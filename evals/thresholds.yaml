@@ -1,0 +1,16 @@
+# Пороги eval-гейта — значения из docs/PRD.md §6 / docs/eval-plan.md §1.
+# НЕ снижать ради зелёного CI: изменение порога — отдельный PR с обоснованием
+# (.claude/rules/evals.md).
+
+# Падение любой гейт-метрики больше этого значения относительно baseline —
+# красный, даже если абсолютный порог пройден (eval-plan §4)
+max_baseline_drop: 0.05
+
+metrics:
+  faithfulness: { min: 0.85 }
+  answer_relevance: { min: 0.80 }
+  context_precision: { min: 0.70 }
+  context_recall: { min: 0.75 }
+  citation_validity: { min: 0.95 }
+  honest_refusal_rate: { min: 0.90 }
+  false_refusal_rate: { max: 0.10 }

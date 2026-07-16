@@ -35,3 +35,6 @@ uploads/
 .vscode/
 Thumbs.db
 .DS_Store
+
+# Артефакты eval-прогонов (baseline.json коммитится, отчёты — нет)
+evals/reports/
