@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from lyra.core.clients.llm import LLMResult, Message
+from lyra.core.clients.llm import LLMResult, LLMUnavailable, Message
 from lyra.core.config import Settings, get_settings
 from lyra.core.constants import DEFAULT_TENANT_ID
 from lyra.db.models import (
@@ -266,3 +266,63 @@ async def test_eval_pipeline_end_to_end(demo_env: dict[str, Any], tmp_path: Path
     assert summary2.run_id != summary.run_id
     for metric in ("faithfulness", "answer_relevance", "context_recall"):
         assert summary2.aggregates[metric] == summary.aggregates[metric]
+
+
+class UnavailableJudgeLLM(StubJudgeLLM):
+    """Judge, у которого недоступна LLM: каждый structured падает."""
+
+    async def structured(
+        self, messages: list[Message], schema: type[T], *, node: str, model_role: str = "grading"
+    ) -> tuple[T, LLMResult]:
+        raise LLMUnavailable("judge endpoint down")
+
+
+async def test_judge_failure_does_not_abort_run(demo_env: dict[str, Any], tmp_path: Path) -> None:
+    """Сбой judge на item не роняет прогон: run завершается, гейт красный."""
+    doc_a = demo_env["doc_ids"]["doc-a.md"]
+    dataset_path = tmp_path / "mini.jsonl"
+    dataset_path.write_text(
+        json.dumps(
+            {
+                "id": "mini-1",
+                "kind": "answerable",
+                "subset": "single_chunk",
+                "question": "Сколько дней отпуска?",
+                "ground_truth_answer": "31 день",
+                "expected_docs": ["doc-a.md"],
+                "reviewed": True,
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    good_a = _chunks_for(doc_a, "Отпуск 31 день")
+    retriever = FakeRetriever([good_a, good_a])
+    graph_llm = FakeLLM(
+        chat_responses={"generate": ["Отпуск 31 день [1]."]},
+        structured_responses={
+            "grade_sufficiency": [Sufficiency(sufficient=True, score=0.9)],
+            "self_check": [SelfCheckResult(passed=True)],
+        },
+    )
+    summary = await run_evals(
+        dataset_name="mini-broken",
+        dataset_path=dataset_path,
+        thresholds_path=THRESHOLDS,
+        baseline_path=tmp_path / "baseline.json",
+        output_dir=tmp_path / "reports",
+        llm=graph_llm,
+        judge_llm=UnavailableJudgeLLM(),
+        retriever=retriever,  # type: ignore[arg-type]
+    )
+    assert not summary.gate.passed  # метрики не посчитаны — честно красный
+    maker = get_sessionmaker()
+    async with maker() as session:
+        from lyra.db.repositories import EvalRepository
+
+        repo = EvalRepository(session)
+        run = await repo.get_run(DEFAULT_TENANT_ID, summary.run_id)
+        assert run is not None and run.status.value == "completed"
+        records = await repo.list_records(DEFAULT_TENANT_ID, summary.run_id)
+        assert len(records) == 1
+        assert records[0].judge_raw == {"error": "judge endpoint down"}

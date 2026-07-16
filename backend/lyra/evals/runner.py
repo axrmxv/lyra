@@ -15,7 +15,7 @@ from typing import Any
 
 import structlog
 
-from lyra.core.clients.llm import LLMClient
+from lyra.core.clients.llm import LLMClient, LLMUnavailable
 from lyra.core.config import Settings, get_settings
 from lyra.core.constants import DEFAULT_TENANT_ID
 from lyra.db.models import EvalItem, EvalRunStatus
@@ -274,16 +274,32 @@ async def run_evals(
     for index, jsonl_item in enumerate(jsonl_items, start=1):
         trace_id = f"tr_eval_{run_id.hex[:8]}_{jsonl_item.id}"
         logger.info("eval_item_start", item=jsonl_item.id, index=index, total=len(jsonl_items))
-        scores, record_payload, judge_raw = await _score_item(
-            jsonl_item=jsonl_item,
-            db_item=item_mapping[jsonl_item.id],
-            judge=judge,
-            llm=llm,
-            retriever=retriever,
-            settings=settings,
-            collection_id=collection_id,
-            trace_id=trace_id,
-        )
+        try:
+            scores, record_payload, judge_raw = await _score_item(
+                jsonl_item=jsonl_item,
+                db_item=item_mapping[jsonl_item.id],
+                judge=judge,
+                llm=llm,
+                retriever=retriever,
+                settings=settings,
+                collection_id=collection_id,
+                trace_id=trace_id,
+            )
+        except LLMUnavailable as exc:
+            # Сбой LLM/judge одного item не роняет весь прогон: item
+            # фиксируется без метрик (None), гейт честно краснеет
+            # «метрика не посчитана» при массовых сбоях
+            logger.error("eval_item_failed", item=jsonl_item.id, error=str(exc))
+            scores = ItemScores(
+                item_id=jsonl_item.id,
+                kind=jsonl_item.kind.value,
+                subset=jsonl_item.subset,
+                paraphrase_group=jsonl_item.paraphrase_group,
+                refusal=False,
+                trace_id=trace_id,
+            )
+            record_payload = {"answer": None, "citations": None}
+            judge_raw = {"error": str(exc)}
         all_scores.append(scores)
         async with maker() as session:
             await EvalRepository(session).add_record(

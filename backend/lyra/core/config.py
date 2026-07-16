@@ -76,7 +76,9 @@ class Settings(BaseSettings):
     judge_api_base: str = ""  # например https://api.openai.com/v1
     judge_api_key: str = ""  # секрет: env LYRA_JUDGE_API_KEY / GitHub Secrets
     judge_cloud_model: str = "gpt-4o-mini"
-    judge_timeout_s: float = 120.0
+    # Faithfulness-вызов несёт полный контекст item — на CPU дольше
+    # обычного grading-вызова; выравниваем с llm_timeout_s
+    judge_timeout_s: float = 300.0
     # Каталог evals/ (датасет, thresholds, baseline, отчёты); в контейнерах
     # монтируется в /repo/evals
     evals_dir: str = "evals"

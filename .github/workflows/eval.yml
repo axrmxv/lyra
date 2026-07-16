@@ -3,8 +3,12 @@
 #
 # Job тяжёлый: поднимает полный compose-стек с Ollama (CPU-инференс) —
 # типичное время прогона golden-датасета на runner'е измеряется часами.
-# Judge: cloud при наличии секрета LYRA_JUDGE_API_KEY (рекомендовано),
-# иначе локальная модель.
+#
+# Judge в CI — облачный (eval-plan §1, A-9): локальный 7B на shared-раннере
+# падает по таймауту. Пока секрет LYRA_JUDGE_API_KEY не задан, прогон
+# ПРОПУСКАЕТСЯ (job зелёный с предупреждением) — гейт де-факто выключен;
+# включение = добавить секрет + variables LYRA_JUDGE_API_BASE /
+# LYRA_JUDGE_CLOUD_MODEL.
 
 name: eval
 
@@ -33,7 +37,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Проверить наличие облачного judge
+        id: judge
+        env:
+          JUDGE_KEY: ${{ secrets.LYRA_JUDGE_API_KEY }}
+        run: |
+          if [ -z "$JUDGE_KEY" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Секрет LYRA_JUDGE_API_KEY не задан — eval-прогон пропущен, гейт неактивен. Для включения: Secrets → LYRA_JUDGE_API_KEY, Variables → LYRA_JUDGE_API_BASE, LYRA_JUDGE_CLOUD_MODEL."
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Подготовить .env
+        if: steps.judge.outputs.enabled == 'true'
         run: |
           cat > .env <<EOF
           LYRA_ENV=ci
@@ -47,6 +64,7 @@ jobs:
           EOF
 
       - name: Поднять стек
+        if: steps.judge.outputs.enabled == 'true'
         run: |
           docker compose -f infra/docker-compose.yml --project-directory . up -d --build \
             postgres redis api worker ollama embeddings reranker
@@ -59,28 +77,31 @@ jobs:
           curl -sf http://localhost:8000/health/ready
 
       - name: Загрузить модель Ollama
+        if: steps.judge.outputs.enabled == 'true'
         run: docker compose -f infra/docker-compose.yml --project-directory . exec -T ollama ollama pull qwen2.5:7b-instruct-q4_K_M
 
       - name: Сид демо-корпуса
+        if: steps.judge.outputs.enabled == 'true'
         run: make seed-demo
 
       - name: Прогон evals
+        if: steps.judge.outputs.enabled == 'true'
         env:
-          LYRA_JUDGE_PROVIDER: ${{ secrets.LYRA_JUDGE_API_KEY != '' && 'cloud' || 'local' }}
+          LYRA_JUDGE_PROVIDER: cloud
           LYRA_JUDGE_API_KEY: ${{ secrets.LYRA_JUDGE_API_KEY }}
           LYRA_JUDGE_API_BASE: ${{ vars.LYRA_JUDGE_API_BASE }}
           LYRA_JUDGE_CLOUD_MODEL: ${{ vars.LYRA_JUDGE_CLOUD_MODEL }}
         run: make eval
 
       - name: Отчёт артефактом
-        if: always()
+        if: always() && steps.judge.outputs.enabled == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: eval-report
           path: evals/reports/
 
       - name: Комментарий в PR
-        if: github.event_name == 'pull_request' && always()
+        if: github.event_name == 'pull_request' && always() && steps.judge.outputs.enabled == 'true'
         uses: actions/github-script@v7
         with:
           script: |
