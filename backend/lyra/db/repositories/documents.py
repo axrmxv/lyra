@@ -160,6 +160,16 @@ class DocumentRepository(BaseRepository):
         )
         return list(result.scalars())
 
+    async def find_by_external_id(self, tenant_id: uuid.UUID, external_id: str) -> Document | None:
+        """Поиск без source (external_id уникален в пределах source; для
+        резолва разметки eval-датасета по именам файлов демо-корпуса)."""
+        result = await self.session.execute(
+            select(Document)
+            .where(Document.tenant_id == tenant_id, Document.external_id == external_id)
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
     async def count(self, tenant_id: uuid.UUID, *, source_id: uuid.UUID | None = None) -> int:
         query = select(func.count()).select_from(Document).where(Document.tenant_id == tenant_id)
         if source_id is not None:

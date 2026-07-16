@@ -68,6 +68,19 @@ class Settings(BaseSettings):
     chat_history_messages: int = 10  # хвост истории сессии в контекст графа
     cors_origins: str = "http://localhost:5173"  # origin фронтенда, через запятую
 
+    # Evals (фаза 6). Judge только в evals/CI, в runtime не используется
+    # (eval-plan §1, A-9). local = Ollama (на GPU ставить qwen2.5:14b);
+    # cloud = OpenAI-совместимый endpoint, ключ из env — только для CI.
+    judge_provider: str = "local"  # local | cloud
+    judge_model: str = "qwen2.5:7b-instruct-q4_K_M"  # локальный судья (CPU-стенд)
+    judge_api_base: str = ""  # например https://api.openai.com/v1
+    judge_api_key: str = ""  # секрет: env LYRA_JUDGE_API_KEY / GitHub Secrets
+    judge_cloud_model: str = "gpt-4o-mini"
+    judge_timeout_s: float = 120.0
+    # Каталог evals/ (датасет, thresholds, baseline, отчёты); в контейнерах
+    # монтируется в /repo/evals
+    evals_dir: str = "evals"
+
     # Ingest (фаза 2)
     upload_dir: str = "/data/uploads"
     upload_max_bytes: int = 50 * 1024 * 1024  # FR-1

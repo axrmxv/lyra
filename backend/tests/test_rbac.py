@@ -58,6 +58,9 @@ RBAC_MATRIX = [
         {"message_id": str(uuid.uuid4()), "rating": "up"},
     ),
     ("GET", "/api/v1/feedback", UserRole.ADMIN, None),
+    # Фаза 6: eval-runs (docs/api-contract.md §6, UC-8)
+    ("POST", "/api/v1/admin/eval-runs", UserRole.ADMIN, {"dataset_name": "golden"}),
+    ("GET", f"/api/v1/admin/eval-runs/{uuid.uuid4()}", UserRole.ADMIN, None),
 ]
 
 ROLES = [UserRole.VIEWER, UserRole.EDITOR, UserRole.ADMIN]
@@ -66,6 +69,7 @@ ROLES = [UserRole.VIEWER, UserRole.EDITOR, UserRole.ADMIN]
 @pytest.fixture(autouse=True)
 def no_celery_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
     """Роуты ставят Celery-задачи; в тестах брокер недоступен — глушим delay."""
+    import lyra.workers.tasks.evals as evals_tasks
     import lyra.workers.tasks.ingest as ingest_tasks
 
     class FakeResult:
@@ -74,6 +78,7 @@ def no_celery_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
     for task_name in ("process_upload", "sync_source", "reindex_collection"):
         task = getattr(ingest_tasks, task_name)
         monkeypatch.setattr(task, "delay", lambda *a, **k: FakeResult())
+    monkeypatch.setattr(evals_tasks.run_evals_task, "delay", lambda *a, **k: FakeResult())
 
 
 @pytest.fixture(autouse=True)
