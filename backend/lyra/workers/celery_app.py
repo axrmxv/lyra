@@ -11,7 +11,11 @@ from lyra.core.config import get_settings
 
 settings = get_settings()
 
-celery_app = Celery("lyra", broker=settings.redis_url, include=["lyra.workers.tasks.ingest"])
+celery_app = Celery(
+    "lyra",
+    broker=settings.redis_url,
+    include=["lyra.workers.tasks.ingest", "lyra.workers.tasks.evals"],
+)
 
 celery_app.conf.update(
     task_acks_late=True,

@@ -54,3 +54,37 @@ class CollectionPatch(BaseModel):
 class CollectionsPage(BaseModel):
     items: list[CollectionOut]
     total: int
+
+
+class EvalRunRequest(BaseModel):
+    """api-contract §6: dataset_id; dataset_name — аддитивное удобство
+    (датасет создаётся при первом синке jsonl, id заранее неизвестен)."""
+
+    dataset_id: uuid.UUID | None = None
+    dataset_name: str = "golden"
+    judge: str | None = Field(default=None, pattern="^(local|cloud)$")
+
+
+class EvalRunAccepted(BaseModel):
+    run_id: uuid.UUID
+
+
+class EvalFailedItem(BaseModel):
+    item_id: uuid.UUID
+    question: str
+    faithfulness: float | None = None
+    citation_validity: float | None = None
+    answer_relevance: float | None = None
+
+
+class EvalBaselineOut(BaseModel):
+    delta: dict[str, float] = Field(default_factory=dict)
+
+
+class EvalRunOut(BaseModel):
+    run_id: uuid.UUID
+    status: str
+    git_ref: str | None
+    metrics: dict[str, Any] = Field(default_factory=dict)
+    baseline: EvalBaselineOut | None = None
+    failed_items: list[EvalFailedItem] = Field(default_factory=list)

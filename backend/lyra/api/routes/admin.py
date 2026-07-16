@@ -13,6 +13,11 @@ from lyra.api.schemas.admin import (
     CollectionOut,
     CollectionPatch,
     CollectionsPage,
+    EvalBaselineOut,
+    EvalFailedItem,
+    EvalRunAccepted,
+    EvalRunOut,
+    EvalRunRequest,
     UserCreate,
     UserPatch,
     UsersPage,
@@ -23,7 +28,8 @@ from lyra.core.auth import hash_password
 from lyra.core.constants import DEFAULT_TENANT_ID
 from lyra.core.errors import ConflictError, NotFoundError
 from lyra.db.models import UserRole
-from lyra.db.repositories import CollectionRepository, UserRepository
+from lyra.db.repositories import CollectionRepository, EvalRepository, UserRepository
+from lyra.workers.tasks.evals import run_evals_task
 from lyra.workers.tasks.ingest import reindex_collection
 
 router = APIRouter(
@@ -77,6 +83,66 @@ async def reindex(body: ReindexRequest, session: SessionDep) -> dict[str, str]:
         raise NotFoundError("Коллекция не найдена")
     reindex_collection.delay(str(body.collection_id))
     return {"status": "queued", "collection_id": str(body.collection_id)}
+
+
+@router.post("/eval-runs", status_code=202)
+async def create_eval_run(body: EvalRunRequest, session: SessionDep) -> EvalRunAccepted:
+    """Запуск eval-прогона в очереди evals (api-contract §6, UC-8)."""
+    evals = EvalRepository(session)
+    if body.dataset_id is not None:
+        dataset = await evals.get_dataset(DEFAULT_TENANT_ID, body.dataset_id)
+        if dataset is None:
+            raise NotFoundError("Датасет не найден")
+    else:
+        dataset = await evals.get_or_create_dataset(DEFAULT_TENANT_ID, body.dataset_name)
+    run = await evals.create_run(DEFAULT_TENANT_ID, dataset_id=dataset.id)
+    await session.commit()
+    run_evals_task.delay(str(run.id), dataset.name, body.judge)
+    return EvalRunAccepted(run_id=run.id)
+
+
+@router.get("/eval-runs/{run_id}")
+async def get_eval_run(run_id: uuid.UUID, session: SessionDep) -> EvalRunOut:
+    evals = EvalRepository(session)
+    run = await evals.get_run(DEFAULT_TENANT_ID, run_id)
+    if run is None:
+        raise NotFoundError("Eval-run не найден")
+
+    aggregate = dict(run.aggregate or {})
+    baseline_delta = aggregate.pop("baseline_delta", None)
+    failed_items: list[EvalFailedItem] = []
+    if run.status.value == "completed":
+        # Провальные items: низкий faithfulness или ложный отказ на answerable
+        problem_records = []
+        for record in await evals.list_records(DEFAULT_TENANT_ID, run_id):
+            metrics = record.metrics or {}
+            if metrics.get("kind") == "unanswerable":
+                continue
+            faithfulness = metrics.get("faithfulness")
+            false_refusal = bool(metrics.get("refusal"))
+            if (faithfulness is not None and faithfulness < 0.7) or false_refusal:
+                problem_records.append((faithfulness if faithfulness is not None else 0.0, record))
+        problem_records.sort(key=lambda entry: entry[0])
+        for _score, record in problem_records[:10]:
+            metrics = record.metrics or {}
+            item = await evals.get_item(DEFAULT_TENANT_ID, record.item_id)
+            failed_items.append(
+                EvalFailedItem(
+                    item_id=record.item_id,
+                    question=item.question if item else "",
+                    faithfulness=metrics.get("faithfulness"),
+                    citation_validity=metrics.get("citation_validity"),
+                    answer_relevance=metrics.get("answer_relevance"),
+                )
+            )
+    return EvalRunOut(
+        run_id=run.id,
+        status=run.status.value,
+        git_ref=run.git_ref,
+        metrics=aggregate,
+        baseline=EvalBaselineOut(delta=baseline_delta) if baseline_delta else None,
+        failed_items=failed_items,
+    )
 
 
 @router.get("/collections")

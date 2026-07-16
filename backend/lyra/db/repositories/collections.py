@@ -18,6 +18,12 @@ class CollectionRepository(BaseRepository):
         )
         return result.scalar_one_or_none()
 
+    async def get_by_name(self, tenant_id: uuid.UUID, name: str) -> Collection | None:
+        result = await self.session.execute(
+            select(Collection).where(Collection.tenant_id == tenant_id, Collection.name == name)
+        )
+        return result.scalar_one_or_none()
+
     async def list(
         self, tenant_id: uuid.UUID, *, limit: int = 50, offset: int = 0
     ) -> tuple[list[Collection], int]:

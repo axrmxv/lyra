@@ -1,0 +1,9 @@
+# Авто-провижининг дашбордов из JSON в этом каталоге
+apiVersion: 1
+
+providers:
+  - name: lyra
+    folder: LYRA
+    type: file
+    options:
+      path: /etc/grafana/provisioning/dashboards

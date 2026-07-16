@@ -1,0 +1,117 @@
+# Eval-гейт (docs/eval-plan.md §3): PR с изменениями промптов/retrieval/
+# chunking/конфигов моделей + nightly полный прогон.
+#
+# Job тяжёлый: поднимает полный compose-стек с Ollama (CPU-инференс) —
+# типичное время прогона golden-датасета на runner'е измеряется часами.
+#
+# Judge в CI — облачный (eval-plan §1, A-9): локальный 7B на shared-раннере
+# падает по таймауту. Пока секрет LYRA_JUDGE_API_KEY не задан, прогон
+# ПРОПУСКАЕТСЯ (job зелёный с предупреждением) — гейт де-факто выключен;
+# включение = добавить секрет + variables LYRA_JUDGE_API_BASE /
+# LYRA_JUDGE_CLOUD_MODEL.
+
+name: eval
+
+on:
+  pull_request:
+    paths:
+      - "backend/lyra/rag/**"
+      - "backend/lyra/retrieval/**"
+      - "backend/lyra/ingest/chunker.py"
+      - "backend/lyra/evals/**"
+      - "backend/lyra/core/config.py"
+      - "evals/**"
+      - ".github/workflows/eval.yml"
+  schedule:
+    - cron: "30 2 * * *" # nightly полный прогон
+  workflow_dispatch:
+
+concurrency:
+  group: eval-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Проверить наличие облачного judge
+        id: judge
+        env:
+          JUDGE_KEY: ${{ secrets.LYRA_JUDGE_API_KEY }}
+        run: |
+          if [ -z "$JUDGE_KEY" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Секрет LYRA_JUDGE_API_KEY не задан — eval-прогон пропущен, гейт неактивен. Для включения: Secrets → LYRA_JUDGE_API_KEY, Variables → LYRA_JUDGE_API_BASE, LYRA_JUDGE_CLOUD_MODEL."
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Подготовить .env
+        if: steps.judge.outputs.enabled == 'true'
+        run: |
+          cat > .env <<EOF
+          LYRA_ENV=ci
+          LYRA_JWT_SECRET=$(openssl rand -hex 32)
+          LYRA_ADMIN_EMAIL=admin@lyra.local
+          LYRA_ADMIN_PASSWORD=$(openssl rand -hex 16)
+          LYRA_DB_HOST=postgres
+          LYRA_DB_USER=lyra
+          LYRA_DB_PASSWORD=lyra
+          LYRA_DB_NAME=lyra
+          EOF
+
+      - name: Поднять стек
+        if: steps.judge.outputs.enabled == 'true'
+        run: |
+          docker compose -f infra/docker-compose.yml --project-directory . up -d --build \
+            postgres redis api worker ollama embeddings reranker
+          # readiness API проверяет все зависимости
+          for i in $(seq 1 60); do
+            status=$(curl -s http://localhost:8000/health/ready | grep -o '"status":"ready"' || true)
+            [ -n "$status" ] && break
+            sleep 10
+          done
+          curl -sf http://localhost:8000/health/ready
+
+      - name: Загрузить модель Ollama
+        if: steps.judge.outputs.enabled == 'true'
+        run: docker compose -f infra/docker-compose.yml --project-directory . exec -T ollama ollama pull qwen2.5:7b-instruct-q4_K_M
+
+      - name: Сид демо-корпуса
+        if: steps.judge.outputs.enabled == 'true'
+        run: make seed-demo
+
+      - name: Прогон evals
+        if: steps.judge.outputs.enabled == 'true'
+        env:
+          LYRA_JUDGE_PROVIDER: cloud
+          LYRA_JUDGE_API_KEY: ${{ secrets.LYRA_JUDGE_API_KEY }}
+          LYRA_JUDGE_API_BASE: ${{ vars.LYRA_JUDGE_API_BASE }}
+          LYRA_JUDGE_CLOUD_MODEL: ${{ vars.LYRA_JUDGE_CLOUD_MODEL }}
+        run: make eval
+
+      - name: Отчёт артефактом
+        if: always() && steps.judge.outputs.enabled == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: evals/reports/
+
+      - name: Комментарий в PR
+        if: github.event_name == 'pull_request' && always() && steps.judge.outputs.enabled == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'evals/reports/eval-report.md';
+            if (!fs.existsSync(path)) return;
+            const body = fs.readFileSync(path, 'utf8');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });

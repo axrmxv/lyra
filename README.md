@@ -53,3 +53,15 @@ UI: http://localhost:5173 · API: http://localhost:8000/docs
 ## Статус
 
 Фаза 0 (скаффолдинг) — см. [PLAN.md](PLAN.md): фазы 0–7 = MVP, P1–P4 = production-трек.
+
+## Наблюдаемость (фаза 6)
+
+- Prometheus: http://localhost:9090, Grafana: http://localhost:3000
+  (дашборд «LYRA — обзор» провижинится автоматически).
+- LLM-трейсы — структурные логи внутри контура (наружу не отправляются,
+  docs/security-and-access.md §5). Просмотр трейса запроса по trace_id:
+
+```bash
+docker logs lyra-api-1 2>&1 | grep '"llm_call"' \
+  | jq -r 'select(.trace_id=="tr_...") | [.node,.model,.prompt_tokens,.completion_tokens,.duration_ms] | @tsv'
+```

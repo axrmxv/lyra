@@ -3,7 +3,7 @@
 
 COMPOSE := docker compose -f infra/docker-compose.yml --project-directory .
 
-.PHONY: up down logs test test-backend test-frontend lint lint-backend lint-frontend pull-models
+.PHONY: up down logs test test-backend test-frontend lint lint-backend lint-frontend pull-models eval seed-demo
 
 up:
 	$(COMPOSE) up -d --build
@@ -31,6 +31,21 @@ lint-backend:
 
 lint-frontend:
 	$(COMPOSE) run --rm --no-deps frontend sh -c "npm install && npm run lint && npm run format"
+
+# Сид демо-корпуса (идемпотентно) — выполняется в api-контейнере,
+# evals/ смонтирован в /repo (docker-compose)
+seed-demo:
+	$(COMPOSE) run --rm -v ./evals:/repo/evals api python -m lyra.evals seed --corpus /repo/evals/corpus
+
+# Прогон evals с дефолтами (docs/eval-plan.md §3); judge — по конфигу
+# (LYRA_JUDGE_PROVIDER). Отчёты — в evals/reports/
+eval:
+	$(COMPOSE) run --rm -v ./evals:/repo/evals -w /app api \
+		python -m lyra.evals run --dataset golden \
+		--dataset-path /repo/evals/datasets/golden.jsonl \
+		--thresholds /repo/evals/thresholds.yaml \
+		--baseline /repo/evals/baseline.json \
+		--output /repo/evals/reports
 
 # Модели Ollama тянутся в named volume ollama_models; модели TEI (bge-m3, reranker)
 # скачиваются в hf_cache автоматически при первом старте контейнеров.

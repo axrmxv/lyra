@@ -13,12 +13,13 @@ from datetime import datetime
 from typing import Any
 
 import structlog
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from lyra.core.clients import EmbeddingClient
 from lyra.core.config import get_settings
+from lyra.core.metrics import INDEX_CHUNKS, INGEST_STEP_SECONDS
 from lyra.db.models import Chunk, DocumentVersion, IngestJobStatus, VersionStatus
 from lyra.db.repositories import (
     ChunkRepository,
@@ -51,6 +52,7 @@ class StepTracker:
     def done(self, name: str, **extra: Any) -> None:
         duration_ms = int((time.monotonic() - self._started.get(name, time.monotonic())) * 1000)
         self.steps[name] = {"status": "completed", "duration_ms": duration_ms, **extra}
+        INGEST_STEP_SECONDS.labels(step=name).observe(duration_ms / 1000)
 
 
 async def ingest_ir(
@@ -173,6 +175,14 @@ async def ingest_ir(
     await documents.activate_version(tenant_id, document_id, version.id)
     tracker.done("index")
     await update_job(IngestJobStatus.COMPLETED, document_version_id=version.id)
+    # Размер индекса (FR-20): chunks активных версий
+    active_chunks = await session.scalar(
+        select(func.count())
+        .select_from(Chunk)
+        .join(DocumentVersion, Chunk.document_version_id == DocumentVersion.id)
+        .where(DocumentVersion.status == VersionStatus.ACTIVE)
+    )
+    INDEX_CHUNKS.set(int(active_chunks or 0))
     logger.info(
         "ingest_completed",
         document_id=str(document_id),

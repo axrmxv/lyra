@@ -167,7 +167,7 @@ REST API FastAPI, префикс `/api/v1`. Все схемы — Pydantic v2, O
 - `GET/POST/PATCH /admin/collections` — admin. Управление коллекциями (embedding_model, chunking_config).
 - `GET/POST/PATCH /admin/users` — admin. CRUD пользователей и ролей.
 - `POST /admin/reindex` — admin, 202: `{"collection_id": "uuid"}` — переиндексация (новые версии всех документов).
-- `POST /admin/eval-runs` — admin, 202: `{"dataset_id": "uuid"}` → `{"run_id": "uuid"}` (задача в очереди `evals`).
+- `POST /admin/eval-runs` — admin, 202: `{"dataset_id": "uuid"}` → `{"run_id": "uuid"}` (задача в очереди `evals`). Аддитивно: вместо `dataset_id` можно передать `dataset_name` (дефолт `golden`) и `judge` (`local|cloud`).
 - `GET /admin/eval-runs/{id}` — admin: статус, агрегаты метрик, сравнение с baseline-run:
 ```json
 {"run_id": "uuid", "status": "completed", "git_ref": "abc123",
