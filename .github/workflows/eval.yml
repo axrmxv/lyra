@@ -1,0 +1,96 @@
+# Eval-гейт (docs/eval-plan.md §3): PR с изменениями промптов/retrieval/
+# chunking/конфигов моделей + nightly полный прогон.
+#
+# Job тяжёлый: поднимает полный compose-стек с Ollama (CPU-инференс) —
+# типичное время прогона golden-датасета на runner'е измеряется часами.
+# Judge: cloud при наличии секрета LYRA_JUDGE_API_KEY (рекомендовано),
+# иначе локальная модель.
+
+name: eval
+
+on:
+  pull_request:
+    paths:
+      - "backend/lyra/rag/**"
+      - "backend/lyra/retrieval/**"
+      - "backend/lyra/ingest/chunker.py"
+      - "backend/lyra/evals/**"
+      - "backend/lyra/core/config.py"
+      - "evals/**"
+      - ".github/workflows/eval.yml"
+  schedule:
+    - cron: "30 2 * * *" # nightly полный прогон
+  workflow_dispatch:
+
+concurrency:
+  group: eval-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Подготовить .env
+        run: |
+          cat > .env <<EOF
+          LYRA_ENV=ci
+          LYRA_JWT_SECRET=$(openssl rand -hex 32)
+          LYRA_ADMIN_EMAIL=admin@lyra.local
+          LYRA_ADMIN_PASSWORD=$(openssl rand -hex 16)
+          LYRA_DB_HOST=postgres
+          LYRA_DB_USER=lyra
+          LYRA_DB_PASSWORD=lyra
+          LYRA_DB_NAME=lyra
+          EOF
+
+      - name: Поднять стек
+        run: |
+          docker compose -f infra/docker-compose.yml --project-directory . up -d --build \
+            postgres redis api worker ollama embeddings reranker
+          # readiness API проверяет все зависимости
+          for i in $(seq 1 60); do
+            status=$(curl -s http://localhost:8000/health/ready | grep -o '"status":"ready"' || true)
+            [ -n "$status" ] && break
+            sleep 10
+          done
+          curl -sf http://localhost:8000/health/ready
+
+      - name: Загрузить модель Ollama
+        run: docker compose -f infra/docker-compose.yml --project-directory . exec -T ollama ollama pull qwen2.5:7b-instruct-q4_K_M
+
+      - name: Сид демо-корпуса
+        run: make seed-demo
+
+      - name: Прогон evals
+        env:
+          LYRA_JUDGE_PROVIDER: ${{ secrets.LYRA_JUDGE_API_KEY != '' && 'cloud' || 'local' }}
+          LYRA_JUDGE_API_KEY: ${{ secrets.LYRA_JUDGE_API_KEY }}
+          LYRA_JUDGE_API_BASE: ${{ vars.LYRA_JUDGE_API_BASE }}
+          LYRA_JUDGE_CLOUD_MODEL: ${{ vars.LYRA_JUDGE_CLOUD_MODEL }}
+        run: make eval
+
+      - name: Отчёт артефактом
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: evals/reports/
+
+      - name: Комментарий в PR
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'evals/reports/eval-report.md';
+            if (!fs.existsSync(path)) return;
+            const body = fs.readFileSync(path, 'utf8');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
