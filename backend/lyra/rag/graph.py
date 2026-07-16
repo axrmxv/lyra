@@ -12,6 +12,13 @@ from typing import Any, Protocol
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
+from lyra.core.metrics import (
+    ANSWERS_TOTAL,
+    CORRECTIVE_TOTAL,
+    DEGRADED_ANSWERS_TOTAL,
+    GRAPH_NODE_SECONDS,
+    SELF_CHECK_RETRY_TOTAL,
+)
 from lyra.rag.confidence import compute_confidence
 from lyra.rag.deps import GraphDeps
 from lyra.rag.nodes.cite import REFUSAL_PHRASE, cite
@@ -103,13 +110,18 @@ async def _retry_generate(state: RagState, deps: GraphDeps) -> RagState:
 
 
 def _bind(name: str, fn: NodeFn, deps: GraphDeps) -> BoundNode:
-    """Узел + SSE-статус при входе (стадии не дублируются — карта выше)."""
+    """Узел + SSE-статус при входе + latency-метрика (обвязка, не узлы —
+    .claude/rules/rag-core.md)."""
     stage = STAGE_BY_NODE[name]
 
     async def node(state: RagState) -> RagState:
         if stage is not None:
             await deps.sink.emit_status(stage)
-        return await fn(state, deps)
+        started = time.monotonic()
+        try:
+            return await fn(state, deps)
+        finally:
+            GRAPH_NODE_SECONDS.labels(node=name).observe(time.monotonic() - started)
 
     return node
 
@@ -149,4 +161,12 @@ async def run_graph(state: RagState, deps: GraphDeps) -> RagState:
     result = RagState.model_validate(raw) if not isinstance(raw, RagState) else raw
     assert result.final is not None
     result.final.usage.took_ms = int((time.monotonic() - started) * 1000)
+    # Счётчики исходов (FR-20) — в обвязке, узлы метрик не знают
+    ANSWERS_TOTAL.labels(outcome="refusal" if result.final.refusal else "answered").inc()
+    if result.corrective_iterations:
+        CORRECTIVE_TOTAL.inc(result.corrective_iterations)
+    if result.generate_retries:
+        SELF_CHECK_RETRY_TOTAL.inc(result.generate_retries)
+    if result.final.degraded:
+        DEGRADED_ANSWERS_TOTAL.inc()
     return result

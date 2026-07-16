@@ -1,0 +1,100 @@
+{
+  "title": "LYRA — обзор",
+  "uid": "lyra-overview",
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Latency запроса по узлам графа (p95)",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, node) (rate(lyra_graph_node_seconds_bucket[5m])))",
+          "legendFormat": "{{node}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Retrieval по этапам (p95)",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, step) (rate(lyra_retrieval_step_seconds_bucket[5m])))",
+          "legendFormat": "{{step}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "RPS ответов и доля отказов",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 9 },
+      "targets": [
+        {
+          "expr": "sum(rate(lyra_answers_total[5m]))",
+          "legendFormat": "ответы/с"
+        },
+        {
+          "expr": "sum(rate(lyra_answers_total{outcome=\"refusal\"}[5m])) / clamp_min(sum(rate(lyra_answers_total[5m])), 1e-9)",
+          "legendFormat": "доля отказов"
+        }
+      ],
+      "fieldConfig": { "defaults": {}, "overrides": [] }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Токены LLM по узлам (в минуту)",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 9 },
+      "targets": [
+        {
+          "expr": "sum by (node) (rate(lyra_llm_tokens_total[5m])) * 60",
+          "legendFormat": "{{node}}"
+        }
+      ],
+      "fieldConfig": { "defaults": {}, "overrides": [] }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Ingest: длительность шагов (p95)",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 9 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, step) (rate(lyra_ingest_step_seconds_bucket[10m])))",
+          "legendFormat": "{{step}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Размер индекса (chunks)",
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 17 },
+      "targets": [{ "expr": "lyra_index_chunks", "legendFormat": "chunks" }],
+      "fieldConfig": { "defaults": {}, "overrides": [] }
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Corrective / self-check retry / degraded (за час)",
+      "gridPos": { "h": 5, "w": 12, "x": 6, "y": 17 },
+      "targets": [
+        { "expr": "increase(lyra_corrective_iterations_total[1h])", "legendFormat": "corrective" },
+        { "expr": "increase(lyra_self_check_retries_total[1h])", "legendFormat": "retry" },
+        { "expr": "increase(lyra_degraded_answers_total[1h])", "legendFormat": "degraded" }
+      ],
+      "fieldConfig": { "defaults": {}, "overrides": [] }
+    }
+  ],
+  "schemaVersion": 39,
+  "version": 1
+}
