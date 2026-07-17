@@ -3,11 +3,12 @@
 [![ci](https://github.com/axrmxv/lyra/actions/workflows/ci.yml/badge.svg)](https://github.com/axrmxv/lyra/actions/workflows/ci.yml)
 [![eval](https://github.com/axrmxv/lyra/actions/workflows/eval.yml/badge.svg)](https://github.com/axrmxv/lyra/actions/workflows/eval.yml)
 
-RAG-платформа корпоративных знаний — портфолио-кейс production-мышления:
-чат по внутренним документам с **обязательными проверяемыми цитатами**,
-честными отказами вместо галлюцинаций и измеримым качеством (eval-гейт в CI).
-Полностью self-hosted: Ollama (Qwen2.5-7B), bge-m3, bge-reranker-v2-m3 —
-данные не покидают контур.
+RAG-платформа корпоративных знаний: чат по внутренним документам
+с **обязательными проверяемыми цитатами**, честными отказами вместо
+галлюцинаций и измеримым качеством (eval-гейт в CI). Полностью
+self-hosted: Ollama (Qwen2.5-7B), bge-m3, bge-reranker-v2-m3 — данные
+не покидают контур. Демонстрационная версия с явным путём до production;
+проект развивается как open-source решение.
 
 ## Скриншоты
 
