@@ -28,7 +28,7 @@
 
 ## Последствия
 
-- (+) Заметный прирост context precision — прямо влияет на faithfulness и метрики [eval-plan.md](../eval-plan.md); демонстрирует полный retrieval-стек в портфолио.
+- (+) Заметный прирост context precision — прямо влияет на faithfulness и метрики [eval-plan.md](../eval-plan.md); в демо виден полный retrieval-стек.
 - (+) Отсечение по score даёт sufficiency-узлу ([ADR-006](ADR-006-langgraph-topology.md)) дополнительный сигнал «найдено мало хорошего».
 - (−) Ещё один stateful-по-памяти сервис (~2 GB RAM) в docker-compose.
 
