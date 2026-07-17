@@ -32,10 +32,12 @@ lint-backend:
 lint-frontend:
 	$(COMPOSE) run --rm --no-deps frontend sh -c "npm install && npm run lint && npm run format"
 
-# Сид демо-корпуса (идемпотентно) — выполняется в api-контейнере,
-# evals/ смонтирован в /repo (docker-compose)
+# Сид демо-стенда (идемпотентно): корпус evals + витрина + demo-пользователи
+# из .env; выполняется в api-контейнере, evals/ и demo/ смонтированы в /repo
 seed-demo:
-	$(COMPOSE) run --rm -v ./evals:/repo/evals api python -m lyra.evals seed --corpus /repo/evals/corpus
+	$(COMPOSE) run --rm -v ./evals:/repo/evals -v ./demo:/repo/demo api \
+		python -m lyra.evals seed --corpus /repo/evals/corpus \
+		--showcase /repo/demo/corpus --with-users
 
 # Прогон evals с дефолтами (docs/eval-plan.md §3); judge — по конфигу
 # (LYRA_JUDGE_PROVIDER). Отчёты — в evals/reports/
