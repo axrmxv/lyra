@@ -100,6 +100,11 @@ def create_app() -> FastAPI:
         finally:
             structlog.contextvars.unbind_contextvars("trace_id")
         response.headers["X-Trace-Id"] = trace_id
+        # Security-заголовки (security-and-access §7): API не рендерит HTML,
+        # но заголовки — дешёвая защита от неправильного использования
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "no-referrer"
         return response
 
     @app.get("/health")

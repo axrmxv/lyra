@@ -100,3 +100,31 @@ jobs:
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Аудит зависимостей (фаза 7): warning-режим, не гейт — находки
+  # разбираются вручную, критичные фиксируются в PR
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: pip-audit (backend)
+        continue-on-error: true
+        working-directory: backend
+        run: |
+          pip install -q -e . pip-audit
+          pip-audit --skip-editable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: npm audit (frontend)
+        continue-on-error: true
+        working-directory: frontend
+        run: |
+          npm ci
+          npm audit --audit-level=high
