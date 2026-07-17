@@ -10,13 +10,16 @@ from pathlib import Path
 
 import structlog
 
+from lyra.core.auth import hash_password
+from lyra.core.config import get_settings
 from lyra.core.constants import DEFAULT_TENANT_ID
-from lyra.db.models import IngestJobKind, SourceType
+from lyra.db.models import IngestJobKind, SourceType, UserRole
 from lyra.db.repositories import (
     CollectionRepository,
     DocumentRepository,
     IngestJobRepository,
     SourceRepository,
+    UserRepository,
 )
 from lyra.db.session import get_sessionmaker
 from lyra.ingest.parsers import parse_document
@@ -26,6 +29,7 @@ logger = structlog.get_logger(__name__)
 
 DEMO_COLLECTION_NAME = "Астра-Линк (демо-корпус)"
 DEMO_SOURCE_NAME = "Демо-корпус evals"
+SHOWCASE_COLLECTION_NAME = "Астра-Линк (витрина)"
 EMBEDDING_MODEL = "BAAI/bge-m3"  # ADR-003
 
 
@@ -36,7 +40,12 @@ def _extract_title(text: str, fallback: str) -> str:
     return fallback
 
 
-async def seed_corpus(corpus_dir: Path) -> dict[str, int]:
+async def seed_corpus(
+    corpus_dir: Path,
+    *,
+    collection_name: str = DEMO_COLLECTION_NAME,
+    source_name: str = DEMO_SOURCE_NAME,
+) -> dict[str, int]:
     """Загружает все .md корпуса; возвращает счётчики по статусам job."""
     files = sorted(corpus_dir.glob("*.md"))
     if not files:
@@ -47,10 +56,10 @@ async def seed_corpus(corpus_dir: Path) -> dict[str, int]:
     maker = get_sessionmaker()
     async with maker() as session:
         collections = CollectionRepository(session)
-        collection = await collections.get_by_name(tenant_id, DEMO_COLLECTION_NAME)
+        collection = await collections.get_by_name(tenant_id, collection_name)
         if collection is None:
             collection = await collections.create(
-                tenant_id, name=DEMO_COLLECTION_NAME, embedding_model=EMBEDDING_MODEL
+                tenant_id, name=collection_name, embedding_model=EMBEDDING_MODEL
             )
             await session.commit()
 
@@ -61,13 +70,13 @@ async def seed_corpus(corpus_dir: Path) -> dict[str, int]:
                 tenant_id,
                 collection_id=collection.id,
                 type_=SourceType.UPLOAD,
-                name=DEMO_SOURCE_NAME,
+                name=source_name,
             )
             await session.commit()
 
         documents = DocumentRepository(session)
         jobs = IngestJobRepository(session)
-        for path in files:
+        for index, path in enumerate(files, start=1):
             content = path.read_bytes()
             title = _extract_title(content.decode("utf-8"), fallback=path.name)
             document = await documents.get_by_external_id(tenant_id, source.id, path.name)
@@ -87,6 +96,40 @@ async def seed_corpus(corpus_dir: Path) -> dict[str, int]:
                 ir=ir,
             )
             counts[status.value] = counts.get(status.value, 0) + 1
+            print(f"  [{index}/{len(files)}] {path.name}: {status.value}", flush=True)
             logger.info("seed_document", file=path.name, status=status.value)
 
     return counts
+
+
+async def seed_demo_users() -> list[str]:
+    """Demo-пользователи editor/viewer (пароли из env; admin сидится миграцией).
+
+    Пустой пароль в конфиге — пользователь пропускается с предупреждением.
+    """
+    settings = get_settings()
+    plan = [
+        ("editor@lyra.local", UserRole.EDITOR, settings.demo_editor_password),
+        ("viewer@lyra.local", UserRole.VIEWER, settings.demo_viewer_password),
+    ]
+    created: list[str] = []
+    maker = get_sessionmaker()
+    async with maker() as session:
+        repo = UserRepository(session)
+        for email, role, password in plan:
+            if not password:
+                print(f"  {email}: пропущен (пароль не задан в .env)", flush=True)
+                continue
+            if await repo.get_by_email(DEFAULT_TENANT_ID, email) is not None:
+                print(f"  {email}: уже существует", flush=True)
+                continue
+            await repo.create(
+                DEFAULT_TENANT_ID,
+                email=email,
+                password_hash=hash_password(password),
+                role=role,
+            )
+            created.append(email)
+            print(f"  {email}: создан ({role.value})", flush=True)
+        await session.commit()
+    return created

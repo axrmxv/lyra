@@ -83,6 +83,10 @@ class Settings(BaseSettings):
     # монтируется в /repo/evals
     evals_dir: str = "evals"
 
+    # Demo-пользователи seed-demo (фаза 7); пусто = не создавать
+    demo_editor_password: str = ""
+    demo_viewer_password: str = ""
+
     # Ingest (фаза 2)
     upload_dir: str = "/data/uploads"
     upload_max_bytes: int = 50 * 1024 * 1024  # FR-1

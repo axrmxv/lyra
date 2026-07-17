@@ -9,6 +9,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, UploadFile
+from kombu.exceptions import OperationalError
 
 from lyra.api.deps import SessionDep, require_role
 from lyra.api.schemas.ingest import (
@@ -20,7 +21,7 @@ from lyra.api.schemas.ingest import (
 )
 from lyra.core.config import get_settings
 from lyra.core.constants import DEFAULT_TENANT_ID
-from lyra.core.errors import LyraError, NotFoundError
+from lyra.core.errors import LyraError, NotFoundError, ServiceUnavailableError
 from lyra.db.models import DocumentStatus, IngestJobKind, SourceType, UserRole
 from lyra.db.repositories import DocumentRepository, IngestJobRepository, SourceRepository
 from lyra.ingest.parsers import detect_format
@@ -88,7 +89,14 @@ async def upload_document(
         tenant_id, kind=IngestJobKind.UPLOAD, source_id=source.id
     )
     await session.commit()
-    task = process_upload.delay(str(job.id), str(document.id), file_path, filename, fmt)
+    try:
+        task = process_upload.delay(str(job.id), str(document.id), file_path, filename, fmt)
+    except OperationalError as exc:
+        # Брокер (Redis) недоступен: файл сохранён, job останется queued —
+        # честная 503 вместо 500 (architecture.md §4)
+        raise ServiceUnavailableError(
+            "Очередь обработки недоступна, повторите загрузку позже"
+        ) from exc
     await IngestJobRepository(session).update_status(
         tenant_id, job.id, status=job.status, celery_task_id=task.id
     )

@@ -11,7 +11,7 @@ from pathlib import Path
 
 from lyra.core.logging import configure_logging
 from lyra.evals.runner import run_evals
-from lyra.evals.seed import seed_corpus
+from lyra.evals.seed import SHOWCASE_COLLECTION_NAME, seed_corpus, seed_demo_users
 
 DEFAULT_CORPUS = Path("evals/corpus")
 DEFAULT_DATASET = Path("evals/datasets/golden.jsonl")
@@ -27,6 +27,15 @@ def main() -> int:
 
     seed_parser = sub.add_parser("seed", help="Сид демо-корпуса через ingest-пайплайн")
     seed_parser.add_argument("--corpus", type=Path, default=DEFAULT_CORPUS)
+    seed_parser.add_argument(
+        "--showcase",
+        type=Path,
+        default=None,
+        help="Каталог витринных документов (отдельная коллекция)",
+    )
+    seed_parser.add_argument(
+        "--with-users", action="store_true", help="Создать demo-пользователей из .env"
+    )
 
     run_parser = sub.add_parser("run", help="Прогон evals на датасете")
     run_parser.add_argument("--dataset", default="golden")
@@ -50,8 +59,25 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.command == "seed":
-        counts = asyncio.run(seed_corpus(args.corpus))
-        print(f"Сид корпуса завершён: {counts}")
+        # Один event loop на все шаги: кэшированный engine (get_sessionmaker)
+        # привязан к loop — повторный asyncio.run ломает соединения
+        async def seed_all() -> None:
+            print("Сид demo-корпуса:")
+            counts = await seed_corpus(args.corpus)
+            print(f"Корпус evals: {counts}")
+            if args.showcase is not None:
+                print("Сид витринных документов:")
+                showcase_counts = await seed_corpus(
+                    args.showcase,
+                    collection_name=SHOWCASE_COLLECTION_NAME,
+                    source_name="Витрина демо",
+                )
+                print(f"Витрина: {showcase_counts}")
+            if args.with_users:
+                print("Demo-пользователи:")
+                await seed_demo_users()
+
+        asyncio.run(seed_all())
         return 0
 
     dataset_path = args.dataset_path or (

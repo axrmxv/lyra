@@ -37,6 +37,13 @@ class ConflictError(LyraError):
     status_code = 409
 
 
+class ServiceUnavailableError(LyraError):
+    """Зависимость недоступна (брокер, LLM) — честная 503 (architecture §4)."""
+
+    code = "service_unavailable"
+    status_code = 503
+
+
 class RateLimitError(LyraError):
     """429 c Retry-After (api-contract, преамбула; nfr §2)."""
 
