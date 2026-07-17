@@ -160,3 +160,26 @@ async def test_upload_requires_editor(env: dict[str, object]) -> None:
         data={"collection_id": str(env["collection_id"])},
     )
     assert response.status_code == 401
+
+
+async def test_upload_broker_down_503(
+    env: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Недоступный брокер → честная 503, не 500 (architecture.md §4)."""
+    from kombu.exceptions import OperationalError
+
+    import lyra.workers.tasks.ingest as ingest_tasks
+
+    def broken_delay(*args: object, **kwargs: object) -> None:
+        raise OperationalError("broker down")
+
+    monkeypatch.setattr(ingest_tasks.process_upload, "delay", broken_delay)
+    client: AsyncClient = env["client"]  # type: ignore[assignment]
+    response = await client.post(
+        "/api/v1/documents/upload",
+        files={"file": ("x.md", b"# X\n\ntext", "text/markdown")},
+        data={"collection_id": str(env["collection_id"])},
+        headers=env["headers"],  # type: ignore[arg-type]
+    )
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "service_unavailable"
