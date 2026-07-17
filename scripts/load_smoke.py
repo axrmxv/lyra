@@ -56,7 +56,9 @@ async def login(client: httpx.AsyncClient) -> None:
     client.headers["Authorization"] = f"Bearer {response.json()['access_token']}"
 
 
-async def scenario_search(rps: int, duration_s: int, rerank: bool) -> None:
+async def scenario_search(
+    rps: int, duration_s: int, rerank: bool, unique: bool = False
+) -> None:
     latencies: list[float] = []
     errors = 0
 
@@ -65,11 +67,15 @@ async def scenario_search(rps: int, duration_s: int, rerank: bool) -> None:
 
         async def one(index: int) -> None:
             nonlocal errors
+            query = QUERIES[index % len(QUERIES)]
+            if unique:
+                # Суффикс ломает кэш повторов — меряем холодный путь
+                query = f"{query} {uuid.uuid4().hex[:6]}"
             started = time.monotonic()
             try:
                 response = await client.post(
                     f"{BASE}/search",
-                    json={"query": QUERIES[index % len(QUERIES)], "rerank": rerank},
+                    json={"query": query, "rerank": rerank},
                 )
                 response.raise_for_status()
                 latencies.append((time.monotonic() - started) * 1000)
@@ -189,6 +195,11 @@ def main() -> int:
     search.add_argument("--rps", type=int, default=20)
     search.add_argument("--duration", type=int, default=120)
     search.add_argument("--rerank", action="store_true")
+    search.add_argument(
+        "--unique",
+        action="store_true",
+        help="Уникализировать запросы (обход кэша retrieval — замер холодного пути)",
+    )
     chat = sub.add_parser("chat")
     chat.add_argument("--parallel", type=int, default=3)
     ingest = sub.add_parser("ingest")
@@ -196,7 +207,7 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.scenario == "search":
-        asyncio.run(scenario_search(args.rps, args.duration, args.rerank))
+        asyncio.run(scenario_search(args.rps, args.duration, args.rerank, args.unique))
     elif args.scenario == "chat":
         asyncio.run(scenario_chat(args.parallel))
     else:

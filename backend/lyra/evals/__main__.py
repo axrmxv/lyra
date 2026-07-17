@@ -59,22 +59,25 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.command == "seed":
-        print("Сид demo-корпуса:")
-        counts = asyncio.run(seed_corpus(args.corpus))
-        print(f"Корпус evals: {counts}")
-        if args.showcase is not None:
-            print("Сид витринных документов:")
-            showcase_counts = asyncio.run(
-                seed_corpus(
+        # Один event loop на все шаги: кэшированный engine (get_sessionmaker)
+        # привязан к loop — повторный asyncio.run ломает соединения
+        async def seed_all() -> None:
+            print("Сид demo-корпуса:")
+            counts = await seed_corpus(args.corpus)
+            print(f"Корпус evals: {counts}")
+            if args.showcase is not None:
+                print("Сид витринных документов:")
+                showcase_counts = await seed_corpus(
                     args.showcase,
                     collection_name=SHOWCASE_COLLECTION_NAME,
                     source_name="Витрина демо",
                 )
-            )
-            print(f"Витрина: {showcase_counts}")
-        if args.with_users:
-            print("Demo-пользователи:")
-            asyncio.run(seed_demo_users())
+                print(f"Витрина: {showcase_counts}")
+            if args.with_users:
+                print("Demo-пользователи:")
+                await seed_demo_users()
+
+        asyncio.run(seed_all())
         return 0
 
     dataset_path = args.dataset_path or (
