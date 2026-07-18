@@ -88,3 +88,7 @@ docker logs lyra-api-1 2>&1 | grep '"llm_call"' \
 `pre-commit install && pre-commit install --hook-type commit-msg` — обязательный
 шаг (ruff, prettier, gitleaks, commitlint). Команды: `make test / lint / eval`.
 Правила кода — `.claude/rules/`, инварианты проекта — `.claude/CLAUDE.md`.
+
+## Лицензия
+
+[Apache License 2.0](LICENSE). Copyright © 2026 axrmxv.
