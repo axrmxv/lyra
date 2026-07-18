@@ -3,7 +3,7 @@
 RAG-платформа корпоративных знаний: гибридный поиск (BM25+вектор+RRF+rerank), LangGraph-граф с проверкой достаточности контекста и обязательными цитатами. MVP — демонстрационная версия с явным путём до production; развитие — open-source и коммерческое решение.
 
 ## Стек (зафиксирован, менять только через ADR)
-Python 3.11+ / FastAPI / Pydantic v2 / SQLAlchemy 2.0 async / Alembic / LangGraph / Celery+Redis / PostgreSQL+pgvector / React 18+TS+Vite / Ollama (qwen2.5-7b) / TEI (bge-m3, bge-reranker-v2-m3) / docker-compose / pytest+Vitest.
+Python 3.11+ / FastAPI / Pydantic v2 / SQLAlchemy 2.0 async / Alembic / LangGraph / Celery+Redis / PostgreSQL+pgvector / React 18+TS+Vite+Tailwind 4 (ADR-011) / Ollama (qwen2.5-7b) / TEI (bge-m3, bge-reranker-v2-m3) / docker-compose / pytest+Vitest.
 
 ## Карта документации (читать перед соответствующей работой)
 - Продукт и рамки: `docs/PRD.md` (в т.ч. assumptions) · Архитектура и диаграммы: `docs/architecture.md`
