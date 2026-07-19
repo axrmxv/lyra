@@ -22,13 +22,15 @@ export function MessageBubble({ message, final, feedbackSent, onFeedback }: Mess
   const refusal = message.refusal
   return (
     <div className={`bubble bubble-assistant ${refusal ? 'bubble-refusal' : ''}`}>
-      {refusal && <strong>Ответ не найден в базе знаний</strong>}
+      {refusal && (
+        <strong className="text-danger mb-1.5 block">Ответ не найден в базе знаний</strong>
+      )}
       <div>
         <CitationText content={message.content} citations={message.citations} />
       </div>
       {refusal && final && final.nearest_documents.length > 0 && (
         <>
-          <div>Возможно, будут полезны:</div>
+          <div className="text-ink-muted mt-2.5 text-sm">Возможно, будут полезны:</div>
           <ul className="nearest-docs">
             {final.nearest_documents.map((doc) => (
               <li key={doc.document_id}>
