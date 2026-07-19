@@ -8,14 +8,18 @@ repos:
         args: [--fix]
       - id: ruff-format
 
-  - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v3.1.0
+  # Локальный хук: prettier гоняется с cwd=frontend, чтобы
+  # prettier-plugin-tailwindcss (ADR-011) резолвился из frontend/node_modules.
+  # Архивный mirrors-prettier и pre-commit language:node запускают prettier из
+  # корня репо (noop.js) — plugins резолвятся относительно корня и плагин не
+  # находится. Так же prettier запускает CI (npm run format); версия берётся из
+  # frontend/package-lock.json — отдельный пин не нужен (единый источник истины).
+  - repo: local
     hooks:
       - id: prettier
-        # mirrors-prettier заморожен на prettier 3.1.0; версия хука обязана
-        # совпадать с node_modules/CI (lockfile), иначе хук переписывает
-        # файлы в старый стиль и коммит «зависает» в цикле с ci/lint
-        additional_dependencies: ["prettier@3.9.5"]
+        name: prettier
+        language: system
+        entry: bash -c 'cd frontend && exec ./node_modules/.bin/prettier --write "${@#frontend/}"' prettier
         files: ^frontend/.*\.(ts|tsx|css|json)$
         exclude: package-lock\.json
 
