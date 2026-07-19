@@ -7,7 +7,7 @@ Python 3.11+ / FastAPI / Pydantic v2 / SQLAlchemy 2.0 async / Alembic / LangGrap
 
 ## Карта документации (читать перед соответствующей работой)
 - Продукт и рамки: `docs/PRD.md` (в т.ч. assumptions) · Архитектура и диаграммы: `docs/architecture.md`
-- Решения: `docs/adr/ADR-001..010` — при противоречии кода и ADR прав ADR; изменение решения = новый/обновлённый ADR
+- Решения: `docs/adr/ADR-001..011` — при противоречии кода и ADR прав ADR; изменение решения = новый/обновлённый ADR
 - Данные: `docs/data-model.md` · API: `docs/api-contract.md` · Контекст/chunking: `docs/context-management.md`
 - Качество: `docs/eval-plan.md` · Безопасность: `docs/security-and-access.md` · NFR: `docs/nfr.md` · Роадмап: `PLAN.md`
 

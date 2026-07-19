@@ -50,6 +50,23 @@ make up                # стек + модели (первый запуск ка
 make seed-demo         # корпус, витринные документы, demo-пользователи
 ```
 
+Без `make` (например, чистый Windows без Git Bash/WSL) — те же шаги напрямую
+через docker compose:
+
+```bash
+cp .env.example .env
+# Поднять весь стек (api, worker, frontend, postgres+pgvector, redis, ollama,
+# TEI-embeddings, TEI-reranker, prometheus, grafana):
+docker compose -f infra/docker-compose.yml --project-directory . up -d --build
+# Наполнить демо-стенд (корпус + витрина + demo-пользователи из .env):
+docker compose -f infra/docker-compose.yml --project-directory . run --rm \
+  -v ./evals:/repo/evals -v ./demo:/repo/demo api \
+  python -m lyra.evals seed --corpus /repo/evals/corpus --showcase /repo/demo/corpus --with-users
+```
+
+Логи: `docker compose -f infra/docker-compose.yml --project-directory . logs -f` ·
+остановить: `… down` (добавить `-v` — удалить тома, в т.ч. ~8 ГБ моделей).
+
 UI: http://localhost:5173 · API: http://localhost:8000 · Grafana: http://localhost:3000.
 Регресс-проверка перед показом: `python scripts/demo_smoke.py` (UC-1..UC-9,
 таблица PASS/FAIL). Сценарий показа — [docs/demo-script.md](docs/demo-script.md).
@@ -68,8 +85,8 @@ UI: http://localhost:5173 · API: http://localhost:8000 · Grafana: http://local
 - [PRD](docs/PRD.md) · [Архитектура](docs/architecture.md) · [Модель данных](docs/data-model.md)
 - [API-контракт](docs/api-contract.md) · [Chunking и контекст](docs/context-management.md)
 - [План качества (evals)](docs/eval-plan.md) · [Безопасность](docs/security-and-access.md) · [NFR](docs/nfr.md)
-- Решения: [docs/adr/](docs/adr/) — ADR-001..010 (pgvector, гибридный поиск,
-  топология графа, цитирование, Celery, LLM-абстракция, коннекторы)
+- Решения: [docs/adr/](docs/adr/) — ADR-001..011 (pgvector, гибридный поиск,
+  топология графа, цитирование, Celery, LLM-абстракция, коннекторы, фронтенд-стек)
 
 ## Наблюдаемость
 
@@ -88,6 +105,8 @@ docker logs lyra-api-1 2>&1 | grep '"llm_call"' \
 `pre-commit install && pre-commit install --hook-type commit-msg` — обязательный
 шаг (ruff, prettier, gitleaks, commitlint). Команды: `make test / lint / eval`.
 Правила кода — `.claude/rules/`, инварианты проекта — `.claude/CLAUDE.md`.
+Сабагенты ревью и сопровождения — `.claude/agents/` (code-reviewer,
+security-reviewer, tdd-guide, refactor-cleaner, doc-updater и др.).
 
 ## Лицензия
 
