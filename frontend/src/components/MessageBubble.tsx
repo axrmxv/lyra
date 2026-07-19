@@ -2,7 +2,7 @@
 // confidence, refusal-состоянием и degraded-предупреждением.
 
 import type { ChatMessageItem, FinalEvent } from '../api/types'
-import { CitationText } from './CitationText'
+import { MarkdownText } from './MarkdownText'
 import { ConfidenceBadge } from './ConfidenceBadge'
 import { FeedbackControls } from './FeedbackControls'
 import type { FeedbackRating } from '../api/types'
@@ -25,9 +25,7 @@ export function MessageBubble({ message, final, feedbackSent, onFeedback }: Mess
       {refusal && (
         <strong className="text-danger mb-1.5 block">Ответ не найден в базе знаний</strong>
       )}
-      <div>
-        <CitationText content={message.content} citations={message.citations} />
-      </div>
+      <MarkdownText content={message.content} citations={message.citations} />
       {refusal && final && final.nearest_documents.length > 0 && (
         <>
           <div className="text-ink-muted mt-2.5 text-sm">Возможно, будут полезны:</div>
