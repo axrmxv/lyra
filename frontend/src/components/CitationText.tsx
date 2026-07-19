@@ -1,10 +1,10 @@
-// Рендер текста ответа: маркеры [n] → сноски-чипы с popover.
+// Рендер потокового текста (стриминг): маркеры [n] → сноски-чипы.
 // Маркер без citation рендерится как обычный текст (последняя линия защиты,
 // .claude/rules/frontend.md); текст — только как текст, никакого HTML.
-
-import { useState } from 'react'
+// Финальный ответ форматируется через MarkdownText.
 
 import type { Citation } from '../api/types'
+import { CitationChip } from './CitationChip'
 
 const MARKER_RE = /\[(\d+)\]/g
 
@@ -37,45 +37,6 @@ function splitByMarkers(content: string, citations: Citation[]): Segment[] {
     segments.push({ key: `t${index++}`, text: content.slice(cursor) })
   }
   return segments
-}
-
-function CitationChip({ citation }: { citation: Citation }) {
-  const [open, setOpen] = useState(false)
-  return (
-    <span className="citation-anchor">
-      <button
-        type="button"
-        className="citation-chip"
-        aria-expanded={open}
-        aria-label={`Источник ${citation.id}: ${citation.document_title}`}
-        onClick={() => setOpen((current) => !current)}
-        onBlur={() => setOpen(false)}
-      >
-        {citation.id}
-      </button>
-      {open && (
-        <span className="citation-popover" role="tooltip">
-          <strong>{citation.document_title || 'Без названия'}</strong>
-          <blockquote>{citation.quote}</blockquote>
-          <span>Релевантность: {citation.relevance_score.toFixed(2)}</span>
-          {citation.url && (
-            <>
-              {' · '}
-              {/* onMouseDown раньше onBlur — переход по ссылке не съедается закрытием */}
-              <a
-                href={citation.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                onMouseDown={(event) => event.stopPropagation()}
-              >
-                Открыть источник
-              </a>
-            </>
-          )}
-        </span>
-      )}
-    </span>
-  )
 }
 
 export function CitationText({ content, citations }: { content: string; citations: Citation[] }) {
