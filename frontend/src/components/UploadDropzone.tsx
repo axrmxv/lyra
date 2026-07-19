@@ -39,7 +39,7 @@ export function UploadDropzone({ disabled, onFile, onReject }: UploadDropzonePro
 
   return (
     <div
-      className={`dropzone${dragover ? ' dragover' : ''}`}
+      className={`dropzone ${dragover ? 'dragover' : ''}`}
       onDragOver={(event) => {
         event.preventDefault()
         setDragover(true)

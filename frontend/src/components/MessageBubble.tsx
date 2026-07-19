@@ -21,7 +21,7 @@ export function MessageBubble({ message, final, feedbackSent, onFeedback }: Mess
 
   const refusal = message.refusal
   return (
-    <div className={`bubble bubble-assistant${refusal ? ' bubble-refusal' : ''}`}>
+    <div className={`bubble bubble-assistant ${refusal ? 'bubble-refusal' : ''}`}>
       {refusal && <strong>Ответ не найден в базе знаний</strong>}
       <div>
         <CitationText content={message.content} citations={message.citations} />

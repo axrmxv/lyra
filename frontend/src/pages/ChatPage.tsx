@@ -59,7 +59,7 @@ export function ChatPage() {
           <button
             key={session.id}
             type="button"
-            className={`chat-session-item${session.id === sessionId ? ' active' : ''}`}
+            className={`chat-session-item ${session.id === sessionId ? 'active' : ''}`}
             onClick={() => setSessionId(session.id)}
             title={session.title ?? 'Без названия'}
           >
