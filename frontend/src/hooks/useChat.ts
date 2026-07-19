@@ -15,6 +15,8 @@ interface ChatState {
   // trace_id — история их не хранит, живой стрим — да
   finalById: Record<string, FinalEvent>
   send: (sessionId: string, content: string) => Promise<void>
+  // Прерывает активный стрим (кнопка «Стоп»); частичный ответ отбрасывается
+  stop: () => void
 }
 
 export function useChat(
@@ -111,5 +113,9 @@ export function useChat(
     [onApiError],
   )
 
-  return { messages, loadingHistory, stream, finalById, send }
+  const stop = useCallback(() => {
+    abortRef.current?.abort()
+  }, [])
+
+  return { messages, loadingHistory, stream, finalById, send, stop }
 }

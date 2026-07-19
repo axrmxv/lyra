@@ -67,6 +67,33 @@ describe('useChat', () => {
     expect(result.current.finalById['m1']?.trace_id).toBe('tr_1')
   })
 
+  it('stop() прерывает активный стрим', async () => {
+    let signalRef: AbortSignal | null = null
+    streamMock.mockImplementation(
+      async (
+        _sid: string,
+        _content: string,
+        _onEvent: (event: api.ChatStreamEvent) => void,
+        signal: AbortSignal,
+      ) => {
+        signalRef = signal
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+      },
+    )
+    const onError = vi.fn()
+    const { result } = renderHook(() => useChat('s1', onError))
+    await waitFor(() => expect(result.current.loadingHistory).toBe(false))
+
+    act(() => {
+      void result.current.send('s1', 'вопрос')
+    })
+    act(() => {
+      result.current.stop()
+    })
+
+    await waitFor(() => expect(signalRef?.aborted).toBe(true))
+  })
+
   it('переключение на другую сессию абортит активный стрим', async () => {
     let signalRef: AbortSignal | null = null
     streamMock.mockImplementation(
