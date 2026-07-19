@@ -4,6 +4,7 @@
 import type { ChatMessageItem, FinalEvent } from '../api/types'
 import { MarkdownText } from './MarkdownText'
 import { ConfidenceBadge } from './ConfidenceBadge'
+import { CopyButton } from './CopyButton'
 import { FeedbackControls } from './FeedbackControls'
 import type { FeedbackRating } from '../api/types'
 
@@ -12,9 +13,17 @@ interface MessageBubbleProps {
   final?: FinalEvent
   feedbackSent?: boolean
   onFeedback?: (rating: FeedbackRating, comment?: string) => Promise<boolean>
+  // Передаётся только для последнего ответа: повторно задать вопрос
+  onRegenerate?: () => void
 }
 
-export function MessageBubble({ message, final, feedbackSent, onFeedback }: MessageBubbleProps) {
+export function MessageBubble({
+  message,
+  final,
+  feedbackSent,
+  onFeedback,
+  onRegenerate,
+}: MessageBubbleProps) {
   if (message.role === 'user') {
     return <div className="bubble bubble-user">{message.content}</div>
   }
@@ -52,6 +61,16 @@ export function MessageBubble({ message, final, feedbackSent, onFeedback }: Mess
           </span>
         )}
         {onFeedback && <FeedbackControls sent={feedbackSent ?? false} onSubmit={onFeedback} />}
+        <CopyButton text={message.content} />
+        {onRegenerate && (
+          <button
+            type="button"
+            className="text-ink-muted hover:text-ink text-sm"
+            onClick={onRegenerate}
+          >
+            Регенерировать
+          </button>
+        )}
       </div>
     </div>
   )

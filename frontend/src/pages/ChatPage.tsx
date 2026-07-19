@@ -22,22 +22,33 @@ export function ChatPage() {
 
   const { sessions, loading: sessionsLoading, refresh: refreshSessions, createNew } = useSessions()
   const [sessionId, setSessionId] = useState<string | null>(null)
-  const { messages, loadingHistory, stream, finalById, send } = useChat(sessionId, onApiError)
+  const { messages, loadingHistory, stream, finalById, send, stop } = useChat(sessionId, onApiError)
   const feedback = useFeedback(onApiError)
   const [draft, setDraft] = useState('')
+  const scrollRef = useRef<HTMLDivElement | null>(null)
   const bottomRef = useRef<HTMLDivElement | null>(null)
+  // Держим ленту у низа только если пользователь уже внизу — чтение выше
+  // не перебивается автоскроллом во время стрима
+  const [atBottom, setAtBottom] = useState(true)
 
   const streaming = stream.phase === 'streaming'
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, stream.text, stream.stage])
+  const onScroll = () => {
+    const el = scrollRef.current
+    if (!el) return
+    setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80)
+  }
 
-  const handleSend = async (event: FormEvent) => {
-    event.preventDefault()
-    const content = draft.trim()
-    if (!content || streaming) return
-    setDraft('')
+  const scrollToBottom = () => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    setAtBottom(true)
+  }
+
+  useEffect(() => {
+    if (atBottom) bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, stream.text, stream.stage, atBottom])
+
+  const runSend = async (content: string) => {
     let targetId = sessionId
     if (!targetId) {
       try {
@@ -48,10 +59,23 @@ export function ChatPage() {
         return
       }
     }
+    setAtBottom(true)
     await send(targetId, content)
     // Заголовок сессии появляется после первого сообщения
     void refreshSessions()
   }
+
+  const handleSend = async (event: FormEvent) => {
+    event.preventDefault()
+    const content = draft.trim()
+    if (!content || streaming) return
+    setDraft('')
+    await runSend(content)
+  }
+
+  // Регенерация: повторно задаём последний вопрос пользователя новым ходом
+  const lastAssistantId = [...messages].reverse().find((m) => m.role === 'assistant')?.id
+  const lastUserContent = [...messages].reverse().find((m) => m.role === 'user')?.content
 
   return (
     <div className="flex min-h-0 flex-1">
@@ -73,8 +97,8 @@ export function ChatPage() {
         ))}
       </aside>
 
-      <section className="flex min-w-0 flex-1 flex-col">
-        <div className="flex-1 overflow-y-auto">
+      <section className="relative flex min-w-0 flex-1 flex-col">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto" onScroll={onScroll}>
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-6">
             {loadingHistory && <span className="empty-note">Загружаю историю…</span>}
             {!loadingHistory && messages.length === 0 && !streaming && (
@@ -93,6 +117,11 @@ export function ChatPage() {
                     ? (rating, comment) => feedback.submit(message.id, rating, comment)
                     : undefined
                 }
+                onRegenerate={
+                  message.id === lastAssistantId && !streaming && lastUserContent
+                    ? () => void runSend(lastUserContent)
+                    : undefined
+                }
               />
             ))}
             {streaming && (
@@ -108,6 +137,17 @@ export function ChatPage() {
             <div ref={bottomRef} />
           </div>
         </div>
+
+        {!atBottom && (
+          <button
+            type="button"
+            aria-label="Вниз к последнему сообщению"
+            onClick={scrollToBottom}
+            className="border-line bg-surface text-ink hover:bg-canvas absolute bottom-24 left-1/2 -translate-x-1/2 rounded-full border px-3 py-1.5 shadow-md"
+          >
+            ↓
+          </button>
+        )}
 
         <div className="border-line bg-surface border-t">
           <form
@@ -128,9 +168,15 @@ export function ChatPage() {
                 }
               }}
             />
-            <button type="submit" className="btn btn-primary" disabled={streaming || !draft.trim()}>
-              {streaming ? 'Отвечаю…' : 'Отправить'}
-            </button>
+            {streaming ? (
+              <button type="button" className="btn" onClick={stop}>
+                Стоп
+              </button>
+            ) : (
+              <button type="submit" className="btn btn-primary" disabled={!draft.trim()}>
+                Отправить
+              </button>
+            )}
           </form>
         </div>
       </section>
