@@ -1,0 +1,58 @@
+name: Feature request
+description: Propose an improvement or a new capability
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and motivation
+      description: Which user problem this solves — the "why", not just the "what".
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - frontend (UI / chat)
+        - api
+        - rag (graph, prompts, citations)
+        - retrieval (search, ranking)
+        - ingest (parsing, embeddings)
+        - evals
+        - infra (docker, CI)
+        - cross-cutting
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What else was considered and why it was rejected.
+
+  - type: checkboxes
+    id: invariants
+    attributes:
+      label: Impact on project invariants
+      description: Tick what applies — this determines whether an ADR or an eval run is required (see `.claude/CLAUDE.md`).
+      options:
+        - label: Changes a fixed decision (stack, graph topology, storage) → requires a new or updated ADR
+        - label: Changes prompts / retrieval / chunking → `make eval` is mandatory before the PR
+        - label: Touches citations, honest refusal, confidence or degraded (product honesty)
+        - label: Touches production groundwork (ACL, RLS, multi-tenancy) — these are not enabled "along the way"
+
+  - type: textarea
+    id: dod
+    attributes:
+      label: Definition of Done
+      description: How to verify it is finished — tests and the manual scenario.

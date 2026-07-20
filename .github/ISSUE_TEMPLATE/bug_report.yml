@@ -1,0 +1,76 @@
+name: Bug report
+description: Report a defect in LYRA
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This repository is public — do not paste secrets, tokens, or the contents of private documents.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What is wrong
+      description: A short description of the problem.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Ask …
+        3. …
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - frontend (UI / chat)
+        - api
+        - rag (graph, prompts, citations)
+        - retrieval (search, ranking)
+        - ingest (parsing, embeddings)
+        - evals
+        - infra (docker, CI)
+        - not sure
+    validations:
+      required: true
+
+  - type: input
+    id: trace
+    attributes:
+      label: trace_id
+      description: For chat answers — the trace_id from the final SSE event (see the "Наблюдаемость" section in the README).
+
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: Commit or branch, how it was started (`make up` / `docker compose`), CPU or GPU; for UI issues — browser and theme (light/dark).
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and screenshots
+      description: Output of `docker compose … logs`, UI screenshots. Strip secrets and private document contents.
