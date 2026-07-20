@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Project documentation
+    url: https://github.com/axrmxv/lyra/tree/main/docs
+    about: PRD, architecture, data model, API contract, ADRs, security, NFR — the answer may already be there.
+  - name: Roadmap
+    url: https://github.com/axrmxv/lyra/blob/main/PLAN.md
+    about: MVP and production-track phases — check whether it is already planned.
