@@ -18,7 +18,7 @@ from lyra.core.auth import create_access_token, hash_password
 from lyra.core.config import Settings, get_settings
 from lyra.core.constants import DEFAULT_TENANT_ID
 from lyra.db.models import ChatSession, User, UserRole
-from lyra.db.repositories import UserRepository
+from lyra.db.repositories import CollectionRepository, UserRepository
 from lyra.db.session import get_engine, get_sessionmaker
 
 pytestmark = pytest.mark.integration
@@ -96,6 +96,15 @@ def fast_search(monkeypatch: pytest.MonkeyPatch) -> None:
             return [[0.0] * 1024 for _ in texts]
 
     monkeypatch.setattr("lyra.retrieval.retriever.EmbeddingClient", FakeEmbeddings)
+
+
+@pytest.fixture(autouse=True)
+def upload_dir_tmp(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """upload пишет файл на диск — уводим в tmp, чтобы не трогать /data/uploads."""
+    monkeypatch.setenv("LYRA_UPLOAD_DIR", str(tmp_path_factory.mktemp("rbac-uploads")))
+    get_settings.cache_clear()
 
 
 @pytest.fixture()
@@ -178,6 +187,64 @@ async def test_rbac_matrix(
     allowed = {UserRole.VIEWER: 0, UserRole.EDITOR: 1, UserRole.ADMIN: 2}
     if allowed[role] >= allowed[min_role]:
         # Роль достаточна: не 401/403 (404/409 допустимы — случайные id в path)
+        assert response.status_code not in (401, 403), response.text
+    else:
+        assert response.status_code == 403
+        assert response.json()["error"]["code"] == "forbidden"
+
+
+# POST /documents/upload — multipart, поэтому не встаёт строкой в JSON-матрицу
+# выше, но проверяется по тем же правилам (§2: upload — editor и выше).
+UPLOAD_PATH = "/api/v1/documents/upload"
+UPLOAD_MIN_ROLE = UserRole.EDITOR
+
+
+@pytest.fixture()
+async def upload_collection(migrated_db: Settings) -> uuid.UUID:
+    """Реальная коллекция: со случайным collection_id upload падает на FK, а не 404."""
+    dsn = migrated_db.database_dsn.replace("postgresql://", "postgresql+asyncpg://")
+    engine = create_async_engine(dsn)
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+    async with maker() as session:
+        collection = await CollectionRepository(session).create(
+            DEFAULT_TENANT_ID,
+            name=f"rbac-{uuid.uuid4().hex[:6]}",
+            embedding_model="BAAI/bge-m3",
+        )
+        await session.commit()
+        collection_id = collection.id
+    await engine.dispose()
+    return collection_id
+
+
+def _upload_files() -> dict[str, tuple[str, bytes, str]]:
+    return {"file": ("rbac.txt", b"rbac probe", "text/plain")}
+
+
+async def test_upload_requires_auth(client: AsyncClient, upload_collection: uuid.UUID) -> None:
+    response = await client.post(
+        UPLOAD_PATH, files=_upload_files(), data={"collection_id": str(upload_collection)}
+    )
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "unauthorized"
+
+
+@pytest.mark.parametrize("role", ROLES)
+async def test_upload_rbac(
+    client: AsyncClient,
+    users_by_role: dict[UserRole, User],
+    upload_collection: uuid.UUID,
+    role: UserRole,
+) -> None:
+    headers = {"Authorization": f"Bearer {_token_for(users_by_role[role])}"}
+    response = await client.post(
+        UPLOAD_PATH,
+        files=_upload_files(),
+        data={"collection_id": str(upload_collection)},
+        headers=headers,
+    )
+    allowed = {UserRole.VIEWER: 0, UserRole.EDITOR: 1, UserRole.ADMIN: 2}
+    if allowed[role] >= allowed[UPLOAD_MIN_ROLE]:
         assert response.status_code not in (401, 403), response.text
     else:
         assert response.status_code == 403

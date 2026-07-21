@@ -1,0 +1,38 @@
+# Единая нормализация переводов строк.
+# В репозитории всегда LF; eol=lf распространяет это и на рабочее дерево,
+# иначе на Windows checkout отдаёт CRLF и prettier/ruff видят «грязные» файлы,
+# которые git считает чистыми (грабли Windows-стенда).
+* text=auto eol=lf
+
+# Явно текстовые (на случай ошибочной автодетекции)
+*.py    text eol=lf
+*.pyi   text eol=lf
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.js    text eol=lf
+*.mjs   text eol=lf
+*.css   text eol=lf
+*.html  text eol=lf
+*.json  text eol=lf
+*.jsonl text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.toml  text eol=lf
+*.sql   text eol=lf
+*.sh    text eol=lf
+*.env.example text eol=lf
+Makefile      text eol=lf
+Dockerfile    text eol=lf
+
+# Бинарные — не нормализовать и не диффать как текст
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.svg  text eol=lf
+*.pdf  binary
+*.docx binary
+*.woff  binary
+*.woff2 binary
