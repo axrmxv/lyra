@@ -48,6 +48,11 @@ class FakeLLM:
         self.chat_responses = chat_responses or {}
         self.structured_responses = structured_responses or {}
         self.calls: list[str] = []  # хронология узлов — проверка траектории
+        # Отправленные сообщения по узлам — для проверок того, что уходит в модель
+        self.messages: dict[str, list[list[Message]]] = {}
+
+    def _record(self, node: str, messages: list[Message]) -> None:
+        self.messages.setdefault(node, []).append(messages)
 
     def _pop(self, mapping: dict[str, list[Any]], node: str) -> Any:
         queue = mapping.get(node)
@@ -93,6 +98,7 @@ class FakeLLM:
         model_role: str = "grading",
     ) -> tuple[T, LLMResult]:
         self.calls.append(node)
+        self._record(node, messages)
         obj = self._pop(self.structured_responses, node)
         assert isinstance(obj, schema)
         return obj, LLMResult(text="{}", prompt_tokens=10, completion_tokens=5)

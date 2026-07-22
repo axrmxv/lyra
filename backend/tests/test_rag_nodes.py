@@ -11,7 +11,7 @@ from lyra.rag.nodes.condense import condense_question
 from lyra.rag.nodes.fallback import honest_fallback, nearest_documents
 from lyra.rag.nodes.generate import build_context, generate
 from lyra.rag.nodes.grade import grade_sufficiency
-from lyra.rag.nodes.self_check import self_check
+from lyra.rag.nodes.self_check import self_check, strip_emphasis
 from lyra.rag.state import CitationItem, RagState, SelfCheckResult, Sufficiency
 from tests.rag_fakes import FakeLLM, FakeRetriever, make_chunk
 
@@ -184,6 +184,49 @@ async def test_self_check_pass() -> None:
     ]
     state = await self_check(state, make_deps(llm))
     assert state.self_check is not None and state.self_check.passed
+
+
+def test_strip_emphasis_removes_bold_keeps_text() -> None:
+    assert strip_emphasis("из офиса **не менее 2 дней** — во вторник") == (
+        "из офиса не менее 2 дней — во вторник"
+    )
+    assert strip_emphasis("__жирный__ текст") == "жирный текст"
+    # Маркеры цитат и многострочность не страдают
+    assert strip_emphasis("**срок** 3 года [1]\nвторая строка") == "срок 3 года [1]\nвторая строка"
+
+
+def test_strip_emphasis_keeps_single_markers() -> None:
+    # snake_case и одиночные звёздочки — не эмфазис, трогать нельзя
+    assert strip_emphasis("поле max_tokens и 2 * 2") == "поле max_tokens и 2 * 2"
+    assert strip_emphasis("* пункт списка") == "* пункт списка"
+
+
+async def test_self_check_strips_markdown_before_verification() -> None:
+    """Разметка в чанке сбивала верификацию — в модель уходит чистый текст (#26)."""
+    llm = FakeLLM(structured_responses={"self_check": [SelfCheckResult(passed=True)]})
+    state = _generated_state("Якорные дни — **вторник и четверг**. [1]")
+    state.context_chunks = [
+        make_chunk("из офиса **не менее 2 дней в неделю** — во вторник и четверг")
+    ]
+    state.citations = [
+        CitationItem(
+            id=1,
+            chunk_id=uuid.uuid4(),
+            document_id=uuid.uuid4(),
+            document_title="d",
+            url=None,
+            quote="q",
+            relevance_score=0.5,
+        )
+    ]
+    state = await self_check(state, make_deps(llm))
+
+    sent = llm.messages["self_check"][0][-1]["content"]
+    assert "**" not in sent
+    assert "не менее 2 дней в неделю — во вторник и четверг" in sent
+    assert "[1]" in sent  # маркеры цитат сохранены
+    # Исходный черновик не тронут — пользователь получает форматирование
+    assert "**вторник и четверг**" in (state.draft_answer or "")
 
 
 async def test_self_check_skips_refusal() -> None:
