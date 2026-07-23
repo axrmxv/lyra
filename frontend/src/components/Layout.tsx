@@ -2,12 +2,20 @@ import { NavLink, Outlet } from 'react-router-dom'
 
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
+import type { ThemeMode } from '../theme'
 import { Toasts } from './Toasts'
 
 const ROLE_LABEL: Record<string, string> = {
   viewer: 'наблюдатель',
   editor: 'редактор',
   admin: 'администратор',
+}
+
+// Иконка и подпись по режиму; клик циклит light → dark → system
+const THEME_META: Record<ThemeMode, { icon: string; label: string }> = {
+  light: { icon: '☀', label: 'Тема: светлая' },
+  dark: { icon: '☾', label: 'Тема: тёмная' },
+  system: { icon: '◐', label: 'Тема: системная' },
 }
 
 const navClass = ({ isActive }: { isActive: boolean }) =>
@@ -17,7 +25,8 @@ const navClass = ({ isActive }: { isActive: boolean }) =>
 
 export function Layout() {
   const { user, logout } = useAuth()
-  const { theme, toggle } = useTheme()
+  const { mode, cycle } = useTheme()
+  const themeMeta = THEME_META[mode]
   return (
     <div className="flex h-dvh flex-col">
       <header className="border-line bg-surface flex items-center gap-6 border-b px-5 py-2.5">
@@ -37,11 +46,11 @@ export function Layout() {
           <button
             type="button"
             className="btn btn-icon"
-            aria-label={theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
-            title={theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
-            onClick={toggle}
+            aria-label={`${themeMeta.label}. Переключить тему.`}
+            title={themeMeta.label}
+            onClick={cycle}
           >
-            {theme === 'dark' ? '☀' : '☾'}
+            {themeMeta.icon}
           </button>
           {user && (
             <>
