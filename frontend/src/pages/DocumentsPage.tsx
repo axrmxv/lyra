@@ -27,11 +27,20 @@ export function DocumentsPage() {
   const isEditor = user?.role === 'editor' || user?.role === 'admin'
   const {
     documents,
+    total: documentsTotal,
     loading: documentsLoading,
+    hasMore: documentsHasMore,
     refresh: refreshDocuments,
+    loadMore: loadMoreDocuments,
     remove,
   } = useDocuments(onApiError)
-  const { jobs, loading: jobsLoading, refresh: refreshJobs } = useJobs(isEditor)
+  const {
+    jobs,
+    loading: jobsLoading,
+    hasMore: jobsHasMore,
+    refresh: refreshJobs,
+    loadMore: loadMoreJobs,
+  } = useJobs(isEditor)
   const { defaultCollectionId } = useSources(onApiError)
 
   const handleUpload = async (file: File) => {
@@ -92,6 +101,11 @@ export function DocumentsPage() {
               </tbody>
             </table>
           )}
+          {jobsHasMore && (
+            <button type="button" className="btn mt-3" onClick={() => void loadMoreJobs()}>
+              Показать ещё
+            </button>
+          )}
         </section>
       )}
 
@@ -141,6 +155,18 @@ export function DocumentsPage() {
               ))}
             </tbody>
           </table>
+        )}
+        {documents.length > 0 && (
+          <div className="text-ink-muted mt-3 flex items-center gap-3 text-sm">
+            <span>
+              Показано {documents.length} из {documentsTotal}
+            </span>
+            {documentsHasMore && (
+              <button type="button" className="btn" onClick={() => void loadMoreDocuments()}>
+                Показать ещё
+              </button>
+            )}
+          </div>
         )}
       </section>
     </div>

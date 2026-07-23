@@ -71,6 +71,22 @@ function authHeaders(): Record<string, string> {
   return accessToken ? { Authorization: `Bearer ${accessToken}` } : {}
 }
 
+export interface PageParams {
+  limit?: number
+  offset?: number
+}
+
+// Пагинация api-contract: ?limit=&offset=; undefined-параметры отбрасываем
+function withQuery(path: string, params?: PageParams): string {
+  if (!params) return path
+  const query = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined) query.set(key, String(value))
+  }
+  const suffix = query.toString()
+  return suffix ? `${path}?${suffix}` : path
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
@@ -185,8 +201,8 @@ export function sendFeedback(body: FeedbackCreateRequest): Promise<FeedbackCreat
 
 // --- Documents / ingest ---
 
-export function listDocuments(): Promise<DocumentListResponse> {
-  return request('/documents')
+export function listDocuments(params?: PageParams): Promise<DocumentListResponse> {
+  return request(withQuery('/documents', params))
 }
 
 export function deleteDocument(documentId: string): Promise<void> {
@@ -200,8 +216,8 @@ export function uploadDocument(file: File, collectionId: string): Promise<Upload
   return request('/documents/upload', { method: 'POST', body: form })
 }
 
-export function listJobs(): Promise<IngestJobListResponse> {
-  return request('/ingest/jobs')
+export function listJobs(params?: PageParams): Promise<IngestJobListResponse> {
+  return request(withQuery('/ingest/jobs', params))
 }
 
 // --- Sources ---
