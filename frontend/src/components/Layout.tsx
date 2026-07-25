@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { Link, NavLink, Outlet } from 'react-router-dom'
 
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
@@ -30,7 +30,11 @@ export function Layout() {
   return (
     <div className="flex h-dvh flex-col">
       <header className="border-line bg-surface flex items-center gap-6 border-b px-5 py-2.5">
-        <span className="text-sm font-bold tracking-[0.18em]">LYRA</span>
+        <Link to="/chat" className="flex items-center" aria-label="lyra — на главную">
+          {/* Логотип со шрифтовой частью. Он полностью в серых тонах, поэтому
+              в тёмной теме инвертируется — отдельный светлый файл не нужен. */}
+          <img src="/lyra-logo-new-transparent.svg" alt="lyra" className="h-7 w-auto dark:invert" />
+        </Link>
         <nav className="flex gap-1">
           <NavLink to="/chat" className={navClass}>
             Чат
