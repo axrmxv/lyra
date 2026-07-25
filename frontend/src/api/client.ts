@@ -120,8 +120,8 @@ export function createSession(): Promise<SessionCreateResponse> {
   return request('/chat/sessions', { method: 'POST' })
 }
 
-export function listSessions(): Promise<SessionListResponse> {
-  return request('/chat/sessions')
+export function listSessions(params?: PageParams): Promise<SessionListResponse> {
+  return request(withQuery('/chat/sessions', params))
 }
 
 export function listMessages(sessionId: string): Promise<MessageListResponse> {
