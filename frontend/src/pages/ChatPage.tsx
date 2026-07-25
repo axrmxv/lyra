@@ -11,10 +11,12 @@ import { useFeedback } from '../hooks/useFeedback'
 import { useSessions } from '../hooks/useSessions'
 import { useToasts } from '../hooks/useToasts'
 
+// shrink-0 обязателен: без него flex-элементы сжимаются по высоте вместо того,
+// чтобы переполнить контейнер и включить прокрутку (текст «съезжает»)
 const sessionClass = (active: boolean) =>
   active
-    ? 'bg-accent-soft text-accent truncate rounded-lg px-3 py-2 text-left text-sm font-medium'
-    : 'text-ink hover:bg-canvas truncate rounded-lg px-3 py-2 text-left text-sm'
+    ? 'bg-accent-soft text-accent shrink-0 truncate rounded-lg px-3 py-2 text-left text-sm font-medium'
+    : 'text-ink hover:bg-canvas shrink-0 truncate rounded-lg px-3 py-2 text-left text-sm'
 
 function ArrowUpIcon() {
   return (
@@ -43,17 +45,43 @@ function StopIcon() {
   )
 }
 
+function PlusIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  )
+}
+
 export function ChatPage() {
   const { pushToast } = useToasts()
   const onApiError = useCallback((message: string) => pushToast(message), [pushToast])
 
-  const { sessions, loading: sessionsLoading, refresh: refreshSessions, createNew } = useSessions()
+  const {
+    sessions,
+    loading: sessionsLoading,
+    loadingMore: sessionsLoadingMore,
+    hasMore: sessionsHasMore,
+    refresh: refreshSessions,
+    loadMore: loadMoreSessions,
+    createNew,
+  } = useSessions()
   const [sessionId, setSessionId] = useState<string | null>(null)
   const { messages, loadingHistory, stream, finalById, send, stop } = useChat(sessionId, onApiError)
   const feedback = useFeedback(onApiError)
   const [draft, setDraft] = useState('')
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const bottomRef = useRef<HTMLDivElement | null>(null)
+  const sidebarRef = useRef<HTMLDivElement | null>(null)
   // Держим ленту у низа только если пользователь уже внизу — чтение выше
   // не перебивается автоскроллом во время стрима
   const [atBottom, setAtBottom] = useState(true)
@@ -73,9 +101,27 @@ export function ChatPage() {
     setAtBottom(true)
   }
 
+  // Ленивая подгрузка истории чатов: у нижней границы списка тянем следующую
+  // страницу; loadingMore не даёт запустить несколько загрузок подряд
+  const onSidebarScroll = () => {
+    const el = sidebarRef.current
+    if (!el || !sessionsHasMore || sessionsLoadingMore) return
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 120) {
+      void loadMoreSessions()
+    }
+  }
+
   useEffect(() => {
     if (atBottom) bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, stream.text, stream.stage, atBottom])
+
+  // Если загруженные чаты не переполняют sidebar (высокий экран), события
+  // скролла не будет — дотягиваем следующую страницу сами
+  useEffect(() => {
+    const el = sidebarRef.current
+    if (!el || !sessionsHasMore || sessionsLoadingMore) return
+    if (el.scrollHeight <= el.clientHeight) void loadMoreSessions()
+  }, [sessions, sessionsHasMore, sessionsLoadingMore, loadMoreSessions])
 
   const runSend = async (content: string) => {
     let targetId = sessionId
@@ -150,22 +196,38 @@ export function ChatPage() {
 
   return (
     <div className="flex min-h-0 flex-1">
-      <aside className="border-line bg-surface flex w-64 shrink-0 flex-col gap-1.5 overflow-y-auto border-r p-3">
-        <button type="button" className="btn btn-primary w-full" onClick={() => setSessionId(null)}>
-          + Новый диалог
-        </button>
-        {sessionsLoading && <span className="empty-note">Загрузка…</span>}
-        {sessions.map((session) => (
+      <aside className="border-line bg-surface flex w-64 shrink-0 flex-col border-r">
+        <div className="p-3 pb-2">
           <button
-            key={session.id}
             type="button"
-            className={sessionClass(session.id === sessionId)}
-            onClick={() => setSessionId(session.id)}
-            title={session.title ?? 'Без названия'}
+            className="btn w-full justify-start gap-2"
+            onClick={() => setSessionId(null)}
           >
-            {session.title ?? 'Без названия'}
+            <PlusIcon />
+            Новый чат
           </button>
-        ))}
+        </div>
+        <div
+          ref={sidebarRef}
+          onScroll={onSidebarScroll}
+          className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 pb-3"
+        >
+          {sessionsLoading && <span className="empty-note">Загрузка…</span>}
+          {sessions.map((session) => (
+            <button
+              key={session.id}
+              type="button"
+              className={sessionClass(session.id === sessionId)}
+              onClick={() => setSessionId(session.id)}
+              title={session.title ?? 'Без названия'}
+            >
+              {session.title ?? 'Без названия'}
+            </button>
+          ))}
+          {sessionsLoadingMore && (
+            <span className="empty-note py-2 text-center">Загружаю ещё…</span>
+          )}
+        </div>
       </aside>
 
       <section className="relative flex min-w-0 flex-1 flex-col">

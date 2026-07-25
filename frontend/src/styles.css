@@ -9,34 +9,36 @@
 @theme {
   --font-sans: ui-sans-serif, system-ui, 'Segoe UI', Roboto, sans-serif;
 
-  /* Светлая тема: тёплая «бумажная» гамма, спокойный синий акцент */
-  --color-canvas: #f7f5f0;
-  --color-surface: #fdfcfa;
-  --color-line: #e6e1d7;
-  --color-ink: #262521;
-  --color-ink-muted: #6f6a5e;
-  --color-accent: #3557b7;
-  --color-accent-strong: #2b479c;
-  --color-accent-soft: #e9edf8;
+  /* Светлая тема: нейтральные серые (ориентир — ChatGPT). Акцент не цветной:
+     активные состояния — серая подложка, а не цветная заливка. */
+  --color-canvas: #ffffff;
+  --color-surface: #f9f9f9;
+  --color-line: #e3e3e3;
+  --color-ink: #0d0d0d;
+  --color-ink-muted: #6b6b6b;
+  --color-accent: #0d0d0d;
+  --color-accent-strong: #000000;
+  --color-accent-soft: #ececec;
+  /* Семантические цвета остаются цветными — они несут смысл, не оформление */
   --color-danger: #b3362c;
-  --color-danger-soft: #f9e9e7;
-  --color-warn-soft: #f7edd6;
+  --color-danger-soft: #fbeceb;
+  --color-warn-soft: #fdf3e0;
   --color-ok: #1f7a3d;
 }
 
-/* Тёмная тема: тёплый графит; акцент светлее ради контраста */
+/* Тёмная тема: нейтральный графит, surface приподнят над canvas */
 [data-theme='dark'] {
-  --color-canvas: #21201c;
-  --color-surface: #2a2925;
-  --color-line: #3b3931;
-  --color-ink: #e8e5dd;
-  --color-ink-muted: #a5a094;
-  --color-accent: #8ea9e8;
-  --color-accent-strong: #a3baee;
-  --color-accent-soft: #303a52;
-  --color-danger: #e07b6f;
-  --color-danger-soft: #46302c;
-  --color-warn-soft: #423a28;
+  --color-canvas: #212121;
+  --color-surface: #2a2a2a;
+  --color-line: #3f3f3f;
+  --color-ink: #ececec;
+  --color-ink-muted: #a0a0a0;
+  --color-accent: #ececec;
+  --color-accent-strong: #ffffff;
+  --color-accent-soft: #3a3a3a;
+  --color-danger: #e88a7d;
+  --color-danger-soft: #3a2a28;
+  --color-warn-soft: #3a3327;
   --color-ok: #6fbf8a;
 }
 
@@ -92,11 +94,17 @@
     font-size: 0.92rem;
     transition:
       background-color 0.15s ease,
-      border-color 0.15s ease;
+      border-color 0.15s ease,
+      transform 0.06s ease;
   }
 
   .btn:hover:not(:disabled) {
     background: var(--color-canvas);
+  }
+
+  /* Тактильный отклик на нажатие */
+  .btn:active:not(:disabled) {
+    transform: scale(0.97);
   }
 
   .btn:disabled {

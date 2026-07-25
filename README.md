@@ -1,4 +1,4 @@
-# LYRA — Гармония знаний
+# lyra — база знаний
 
 [![ci](https://github.com/axrmxv/lyra/actions/workflows/ci.yml/badge.svg)](https://github.com/axrmxv/lyra/actions/workflows/ci.yml)
 [![eval](https://github.com/axrmxv/lyra/actions/workflows/eval.yml/badge.svg)](https://github.com/axrmxv/lyra/actions/workflows/eval.yml)
