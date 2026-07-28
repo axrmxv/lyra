@@ -7,7 +7,7 @@ REST API FastAPI, префикс `/api/v1`. Все схемы — Pydantic v2, O
 - Ошибки — единый формат: `{"error": {"code": "string", "message": "string", "details": {}}}`, HTTP-коды: 400 валидация, 401/403 доступ, 404, 409 конфликт, 422 семантика, 429 rate limit, 503 деградация (LLM/зависимость недоступна).
 - 429 всегда несёт заголовок `Retry-After` (секунды); коды: `rate_limited` (лимит запросов: /chat — per-user, /auth/login — per-IP), `overloaded` (заняты все слоты одновременных генераций LLM).
 - Все ответы содержат заголовок `X-Trace-Id`.
-- Пагинация: `?limit=&offset=`, ответ `{"items": [...], "total": int}`.
+- Пагинация: `?limit=&offset=`, ответ `{"items": [...], "total": int}`, где `total` — общее число записей (список источников, документов, сессий, сообщений, фидбека, пользователей, коллекций). Исключение — `GET /ingest/jobs`: `total` равен длине текущей страницы, поэтому клиент определяет наличие следующей страницы по `items.length == limit`.
 
 ---
 
@@ -49,7 +49,7 @@ REST API FastAPI, префикс `/api/v1`. Все схемы — Pydantic v2, O
 `status`: `queued | processing | completed | failed | failed_pii | skipped_duplicate` ([data-model.md](data-model.md)).
 
 ### GET /ingest/jobs — editor
-Список с фильтрами `?status=&source_id=`.
+Список с фильтрами `?status=&source_id=` и пагинацией `?limit=&offset=` (по умолчанию `limit=50`). `total` здесь — длина страницы, не общее число задач (см. преамбулу).
 
 ### Sources — editor (создание/изменение), viewer (чтение)
 - `GET /sources`, `POST /sources`, `GET /sources/{id}`, `PATCH /sources/{id}`, `DELETE /sources/{id}`
@@ -64,7 +64,7 @@ REST API FastAPI, префикс `/api/v1`. Все схемы — Pydantic v2, O
 Секрет передаётся ссылкой на env-переменную, не значением ([security-and-access.md](security-and-access.md)).
 
 ### Documents — viewer (чтение), editor (удаление)
-- `GET /documents?collection_id=&source_id=&q=` — список с метаданными и версией.
+- `GET /documents?collection_id=&source_id=&q=&limit=&offset=` — список с метаданными и версией (`limit=50` по умолчанию).
 - `GET /documents/{id}` — метаданные + список версий.
 - `DELETE /documents/{id}` — soft delete, chunks исключаются из выдачи.
 
@@ -94,7 +94,7 @@ REST API FastAPI, префикс `/api/v1`. Все схемы — Pydantic v2, O
 Создать сессию → `{"session_id": "uuid"}`.
 
 ### GET /chat/sessions / GET /chat/sessions/{id}/messages — viewer
-История своих сессий (чужая сессия → 403, несуществующая → 404).
+История своих сессий (чужая сессия → 403, несуществующая → 404). Пагинация `?limit=&offset=`: сессии — `limit` 1..200 (по умолчанию 50), сообщения — 1..500 (по умолчанию 200).
 
 ```json
 // GET /chat/sessions → 200
