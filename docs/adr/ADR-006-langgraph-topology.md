@@ -22,7 +22,7 @@
 
 ```mermaid
 flowchart TB
-    START((start)) --> COND["condense_question<br/>история диалога → самостоятельный вопрос<br/>(пропускается, если истории нет)"]
+    START((start)) --> COND["condense_question<br/>история диалога → самостоятельный вопрос<br/>(пропускается, если истории нет;<br/>вопрос вне темы диалога возвращается как есть)"]
     COND --> RET["retrieve<br/>hybrid + RRF + rerank (ADR-005, ADR-004)"]
     RET --> GRADE["grade_sufficiency<br/>LLM-judge: покрывает ли контекст вопрос?<br/>+ эвристика: rerank-score, число кандидатов"]
     GRADE -->|sufficient| GEN["generate<br/>ответ строго по контексту, маркеры [n], streaming"]
