@@ -33,7 +33,10 @@ dependencies = [
     "huggingface-hub>=0.24",
     "croniter>=3.0",
     "python-multipart>=0.0.9",
-    "mcp>=1.0",
+    # Верхняя граница: в mcp 2.0 из пакета исчез mypy-видимый
+    # mcp.server.fastmcp, на котором держится connectors/confluence_mcp.py.
+    # Снимать вместе с миграцией обёртки на новый API (ADR-010).
+    "mcp>=1.0,<2",
     "langgraph>=0.2",
 ]
 
