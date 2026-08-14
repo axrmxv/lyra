@@ -11,9 +11,12 @@ from collections import Counter
 from typing import Any
 
 import pymupdf
+import structlog
 
 from lyra.ingest.ir import Block, BlockType, DocumentIR, Section
 from lyra.ingest.parsers.base import ParserError
+
+logger = structlog.get_logger(__name__)
 
 HEADING_FONT_RATIO = 1.15
 HEADING_MAX_CHARS = 120
@@ -37,7 +40,9 @@ def _extract_page_tables(page: Any) -> tuple[list[str], list[Any]]:
     bboxes: list[Any] = []
     try:
         tables = page.find_tables()
-    except Exception:  # редкие падения детектора таблиц не должны ронять парсинг
+    except Exception as exc:  # редкие падения детектора не должны ронять парсинг
+        # Страница теряет таблицы, но остаётся в документе — потеря видимая
+        logger.warning("pdf_tables_failed", page=page.number, error=str(exc))
         return [], []
     for table in tables.tables:
         markdown = _table_to_markdown(table.extract())

@@ -14,12 +14,14 @@ from lyra.db.models import (
     Collection,
     Document,
     DocumentVersion,
+    MessageRole,
     Source,
     SourceType,
     UserRole,
     VersionStatus,
 )
 from lyra.db.repositories import (
+    ChatRepository,
     CollectionRepository,
     DocumentRepository,
     SourceRepository,
@@ -63,6 +65,69 @@ async def test_document_unique_external_id(db_session: AsyncSession, tenant_id: 
     await repo.create(tenant_id, source_id=source_id, external_id="dup", title="A")
     with pytest.raises(IntegrityError):
         await repo.create(tenant_id, source_id=source_id, external_id="dup", title="B")
+
+
+async def test_get_or_create_document_survives_conflict(
+    db_session: AsyncSession, tenant_id: uuid.UUID
+) -> None:
+    """Конфликт по (source_id, external_id) отдаёт чужую строку, а не IntegrityError."""
+    _, source_id, _ = await _make_document(db_session, tenant_id)
+    repo = DocumentRepository(db_session)
+    first = await repo.create(tenant_id, source_id=source_id, external_id="race.md", title="A")
+    await db_session.flush()
+    # Кэш identity map не должен маскировать поход в БД — сверяем по id
+    again = await repo.get_or_create_by_external_id(
+        tenant_id, source_id=source_id, external_id="race.md", title="B"
+    )
+    assert again.id == first.id
+    # Работа вызывающего (созданный ранее source) переживает откат savepoint
+    assert await SourceRepository(db_session).get(tenant_id, source_id) is not None
+
+
+async def test_get_or_create_upload_source_is_single(
+    db_session: AsyncSession, tenant_id: uuid.UUID
+) -> None:
+    collection = await CollectionRepository(db_session).create(
+        tenant_id, name=f"c-{uuid.uuid4().hex[:6]}", embedding_model="BAAI/bge-m3"
+    )
+    repo = SourceRepository(db_session)
+    first = await repo.get_or_create_upload_source(tenant_id, collection.id)
+    second = await repo.get_or_create_upload_source(tenant_id, collection.id)
+    assert first.id == second.id
+    # Partial unique index не даёт создать второй upload-source коллекции
+    with pytest.raises(IntegrityError):
+        await repo.create(
+            tenant_id, collection_id=collection.id, type_=SourceType.UPLOAD, name="Дубль"
+        )
+
+
+async def test_recent_messages_return_tail(db_session: AsyncSession, tenant_id: uuid.UUID) -> None:
+    """История для графа — последние реплики, а не первая страница списка.
+
+    Регрессия: срез по умолчанию limit=200 в длинной сессии отдавал начало
+    разговора, и граф отвечал по устаревшему контексту.
+    """
+    user = await UserRepository(db_session).create(
+        tenant_id,
+        email=f"chat-{uuid.uuid4().hex[:6]}@lyra.local",
+        password_hash=hash_password("secret123"),
+        role=UserRole.VIEWER,
+    )
+    repo = ChatRepository(db_session)
+    chat_session = await repo.create_session(tenant_id, user_id=user.id)
+    for index in range(250):
+        await repo.add_message(
+            tenant_id,
+            session_id=chat_session.id,
+            role=MessageRole.USER,
+            content=f"сообщение {index}",
+        )
+    await db_session.commit()
+
+    tail = await repo.list_recent_messages(tenant_id, chat_session.id, limit=10)
+    assert [message.content for message in tail] == [
+        f"сообщение {index}" for index in range(240, 250)
+    ]
 
 
 async def test_version_unique_content_hash(db_session: AsyncSession, tenant_id: uuid.UUID) -> None:

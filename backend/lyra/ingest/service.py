@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Any
 
 import structlog
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -72,7 +72,12 @@ async def ingest_ir(
     tracker = StepTracker()
 
     async def update_job(status: IngestJobStatus, **kwargs: Any) -> None:
-        await jobs.update_status(tenant_id, job_id, status=status, steps=tracker.steps, **kwargs)
+        job = await jobs.update_status(
+            tenant_id, job_id, status=status, steps=tracker.steps, **kwargs
+        )
+        if job is None:
+            # Job удалён под ногами: продолжать пайплайн некуда и незачем
+            raise PermanentIngestError(f"Ingest-job {job_id} не найден")
         await session.commit()
 
     document = await documents.get(tenant_id, document_id)
@@ -175,14 +180,6 @@ async def ingest_ir(
     await documents.activate_version(tenant_id, document_id, version.id)
     tracker.done("index")
     await update_job(IngestJobStatus.COMPLETED, document_version_id=version.id)
-    # Размер индекса (FR-20): chunks активных версий
-    active_chunks = await session.scalar(
-        select(func.count())
-        .select_from(Chunk)
-        .join(DocumentVersion, Chunk.document_version_id == DocumentVersion.id)
-        .where(DocumentVersion.status == VersionStatus.ACTIVE)
-    )
-    INDEX_CHUNKS.set(int(active_chunks or 0))
     logger.info(
         "ingest_completed",
         document_id=str(document_id),
@@ -203,7 +200,8 @@ async def ingest_upload(
     fmt: str,
 ) -> IngestJobStatus:
     jobs = IngestJobRepository(session)
-    await jobs.update_status(tenant_id, job_id, status=IngestJobStatus.PROCESSING)
+    if await jobs.update_status(tenant_id, job_id, status=IngestJobStatus.PROCESSING) is None:
+        raise PermanentIngestError(f"Ingest-job {job_id} не найден")
     await session.commit()
 
     try:
@@ -229,6 +227,17 @@ async def mark_job_failed(
         tenant_id, job_id, status=IngestJobStatus.FAILED, error=error
     )
     await session.commit()
+
+
+async def refresh_index_size(session: AsyncSession, *, tenant_id: uuid.UUID) -> int:
+    """Обновляет метрику размера индекса (FR-20).
+
+    Полный COUNT по chunks дорожает с корпусом, поэтому считается по
+    расписанию, а не после каждого документа.
+    """
+    total = await ChunkRepository(session).count_active(tenant_id)
+    INDEX_CHUNKS.set(total)
+    return total
 
 
 async def gc_superseded_versions(session: AsyncSession, *, tenant_id: uuid.UUID) -> int:

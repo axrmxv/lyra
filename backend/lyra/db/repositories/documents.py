@@ -9,6 +9,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 
 from lyra.db.models import Document, DocumentVersion, VersionStatus
 from lyra.db.repositories.base import BaseRepository
@@ -53,6 +54,43 @@ class DocumentRepository(BaseRepository):
         )
         self.session.add(document)
         await self.session.flush()
+        return document
+
+    async def get_or_create_by_external_id(
+        self,
+        tenant_id: uuid.UUID,
+        *,
+        source_id: uuid.UUID,
+        external_id: str,
+        title: str,
+        url: str | None = None,
+        author: str | None = None,
+    ) -> Document:
+        """Документ по ключу коннектора; параллельный вызов не даёт 500.
+
+        unique (source_id, external_id) превращает гонку в IntegrityError —
+        конкурент уже создал документ, после отката его видно повторным
+        select'ом (тот же приём, что при создании версии в ingest/service).
+        """
+        existing = await self.get_by_external_id(tenant_id, source_id, external_id)
+        if existing is not None:
+            return existing
+        try:
+            # savepoint: откат конфликта не должен уносить работу вызывающего
+            async with self.session.begin_nested():
+                return await self.create(
+                    tenant_id,
+                    source_id=source_id,
+                    external_id=external_id,
+                    title=title,
+                    url=url,
+                    author=author,
+                )
+        except IntegrityError:
+            pass
+        document = await self.get_by_external_id(tenant_id, source_id, external_id)
+        if document is None:  # pragma: no cover — конфликт был, строка обязана быть
+            raise RuntimeError(f"Документ {external_id} исчез после конфликта вставки")
         return document
 
     async def create_version(

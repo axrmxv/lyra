@@ -154,13 +154,12 @@ async def post_message(
     repo = ChatRepository(session)
     await _own_session(repo, user.tenant_id, session_id, user)
 
-    # История — до записи нового сообщения; хвост режется по конфигу,
+    # История — до записи нового сообщения; хвост режется в запросе,
     # точный токен-бюджет применяет сам граф (context-management §2)
-    previous = await repo.list_messages(user.tenant_id, session_id)
-    history = [
-        {"role": message.role.value, "content": message.content}
-        for message in previous[-settings.chat_history_messages :]
-    ]
+    previous = await repo.list_recent_messages(
+        user.tenant_id, session_id, limit=settings.chat_history_messages
+    )
+    history = [{"role": message.role.value, "content": message.content} for message in previous]
 
     await repo.add_message(
         user.tenant_id, session_id=session_id, role=MessageRole.USER, content=body.content

@@ -4,6 +4,7 @@ import uuid
 from typing import Any
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 
 from lyra.db.models import Source, SourceStatus, SourceType
 from lyra.db.repositories.base import BaseRepository
@@ -45,6 +46,33 @@ class SourceRepository(BaseRepository):
             )
         )
         return result.scalars().first()
+
+    async def get_or_create_upload_source(
+        self, tenant_id: uuid.UUID, collection_id: uuid.UUID
+    ) -> Source:
+        """Неявный upload-source коллекции; параллельная загрузка не плодит дубли.
+
+        Гонку ловит partial unique index uq_sources_upload_per_collection:
+        проигравший откатывает savepoint и забирает source конкурента.
+        """
+        existing = await self.get_upload_source(tenant_id, collection_id)
+        if existing is not None:
+            return existing
+        try:
+            # savepoint: откат конфликта не должен уносить работу вызывающего
+            async with self.session.begin_nested():
+                return await self.create(
+                    tenant_id,
+                    collection_id=collection_id,
+                    type_=SourceType.UPLOAD,
+                    name="Загрузки",
+                )
+        except IntegrityError:
+            pass
+        source = await self.get_upload_source(tenant_id, collection_id)
+        if source is None:  # pragma: no cover — конфликт был, строка обязана быть
+            raise RuntimeError("Upload-source исчез после конфликта вставки")
+        return source
 
     async def create(
         self,
