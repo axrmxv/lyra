@@ -5,6 +5,7 @@
 """
 
 import asyncio
+import random
 
 import httpx
 import structlog
@@ -12,7 +13,8 @@ import structlog
 logger = structlog.get_logger(__name__)
 
 # Окно ретраев перекрывает рестарт TEI после OOM-kill (~90-120с c загрузкой
-# модели; restart: unless-stopped в compose): 1+2+4+8+16+30+30+30 ≈ 121с
+# модели; restart: unless-stopped в compose): 1+2+4+8+16+30+30 ≈ 91с полного
+# backoff, с jitter — от 45с; последняя попытка идёт без ожидания после неё
 MAX_RETRIES = 8
 BACKOFF_BASE_S = 1.0
 BACKOFF_CAP_S = 30.0
@@ -53,9 +55,14 @@ class EmbeddingClient:
                 return data
             except (httpx.HTTPError, ValueError) as exc:
                 last_error = exc
-                delay = min(BACKOFF_BASE_S * 2**attempt, BACKOFF_CAP_S)
+                if attempt == MAX_RETRIES - 1:
+                    break  # спать после последней попытки незачем
+                # Full jitter (.claude/rules/api.md): батчи одного документа
+                # не должны ретраиться синхронно и добивать поднимающийся TEI
+                capped = min(BACKOFF_BASE_S * 2**attempt, BACKOFF_CAP_S)
+                delay = capped * random.uniform(0.5, 1.0)
                 logger.warning(
-                    "embedding_retry", attempt=attempt + 1, delay_s=delay, error=str(exc)
+                    "embedding_retry", attempt=attempt + 1, delay_s=round(delay, 2), error=str(exc)
                 )
                 await asyncio.sleep(delay)
         raise EmbeddingError(f"TEI недоступен после {MAX_RETRIES} попыток: {last_error}")
