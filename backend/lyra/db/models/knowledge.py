@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Any
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import Computed, Enum, ForeignKey, Index, Text, UniqueConstraint
+from sqlalchemy import Computed, Enum, ForeignKey, Index, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -46,6 +46,17 @@ class Collection(IdTimestampMixin, TenantMixin, Base):
 
 class Source(IdTimestampMixin, TenantMixin, Base):
     __tablename__ = "sources"
+    __table_args__ = (
+        # Неявный upload-source коллекции ровно один (api-contract §2):
+        # без этого параллельные загрузки создают дубли source
+        Index(
+            "uq_sources_upload_per_collection",
+            "tenant_id",
+            "collection_id",
+            unique=True,
+            postgresql_where=text("type = 'upload'"),
+        ),
+    )
 
     collection_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("collections.id"))
     type: Mapped[SourceType] = mapped_column(_enum(SourceType, "source_type"))
