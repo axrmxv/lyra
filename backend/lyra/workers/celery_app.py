@@ -31,11 +31,18 @@ celery_app.conf.update(
     # visibility_timeout. Дефолт 1ч → восстановление после SIGKILL слишком
     # долгое; 600с безопасно, пока любая задача короче 10 минут
     broker_transport_options={"visibility_timeout": 600},
+    # Контракт «задача короче visibility_timeout» выше держался на комментарии:
+    # переживший его таск доставлялся повторно и выполнялся дважды. Мягкий
+    # лимит даёт задаче шанс закрыть job, жёсткий — страхует зависший процесс
+    task_soft_time_limit=540,
+    task_time_limit=570,
     beat_schedule={
         # Тик раз в минуту; каждый источник сам решает по своему cron (croniter)
         "sync-due-sources": {"task": "lyra.ingest.sync_due_sources", "schedule": 60.0},
         # Отложенная чистка chunks у superseded-версий (data-model §3)
         "gc-superseded": {"task": "lyra.ingest.gc_superseded", "schedule": 3600.0},
+        # Размер индекса (FR-20): полный COUNT не на пути ingest
+        "refresh-index-size": {"task": "lyra.ingest.refresh_index_size", "schedule": 300.0},
     },
 )
 

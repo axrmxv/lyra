@@ -31,6 +31,20 @@ class ChunkRepository(BaseRepository):
         await self.session.execute(statement, rows)
         return len(rows)
 
+    async def count_active(self, tenant_id: uuid.UUID) -> int:
+        """Размер индекса: chunks активных версий (FR-20).
+
+        Полный COUNT по chunks — не для горячего пути; вызывается из
+        периодической задачи, не из ingest-пайплайна.
+        """
+        total = await self.session.scalar(
+            select(func.count())
+            .select_from(Chunk)
+            .join(DocumentVersion, Chunk.document_version_id == DocumentVersion.id)
+            .where(Chunk.tenant_id == tenant_id, DocumentVersion.status == VersionStatus.ACTIVE)
+        )
+        return total or 0
+
     async def count_for_version(self, tenant_id: uuid.UUID, version_id: uuid.UUID) -> int:
         total = await self.session.scalar(
             select(func.count())

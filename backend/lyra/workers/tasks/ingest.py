@@ -17,6 +17,7 @@ from typing import TypeVar
 
 import httpx
 import structlog
+from celery.exceptions import SoftTimeLimitExceeded
 from croniter import croniter
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -37,6 +38,10 @@ logger = structlog.get_logger(__name__)
 T = TypeVar("T")
 
 TRANSIENT_ERRORS = (EmbeddingError, httpx.HTTPError, ConnectionError, OSError)
+
+# Столько же, сколько читает upload-эндпоинт: detect_format смотрит magic bytes
+# и расширение, а не весь файл
+REINDEX_HEAD_BYTES = 4096
 
 
 def _run_with_session(fn: Callable[[AsyncSession], Awaitable[T]]) -> T:
@@ -90,6 +95,13 @@ def process_upload(job_id: str, document_id: str, file_path: str, filename: str,
         logger.error("ingest_permanent_failure", job_id=job_id, error=str(exc))
         _fail_job(job_id, str(exc))
         return IngestJobStatus.FAILED.value
+    except SoftTimeLimitExceeded:
+        # Задача не уложилась в task_soft_time_limit: повторять её бессмысленно
+        # (следующая упрётся в тот же лимит), а до visibility_timeout остаётся
+        # запас, чтобы честно закрыть job вместо повторной доставки
+        logger.error("ingest_time_limit", job_id=job_id)
+        _fail_job(job_id, "Обработка не уложилась в лимит времени задачи")
+        return IngestJobStatus.FAILED.value
     return status.value
 
 
@@ -117,9 +129,7 @@ def process_confluence_page(job_id: str, source_id: str, external_id: str) -> st
         raw = await connector.fetch(external_id)
         ir = connector.normalize(raw)
 
-        document = await documents.get_by_external_id(
-            tenant_id, source.id, external_id
-        ) or await documents.create(
+        document = await documents.get_or_create_by_external_id(
             tenant_id,
             source_id=source.id,
             external_id=external_id,
@@ -128,7 +138,11 @@ def process_confluence_page(job_id: str, source_id: str, external_id: str) -> st
             author=raw.author,
         )
         document.title = raw.title  # заголовок мог измениться
-        await jobs.update_status(tenant_id, uuid.UUID(job_id), status=IngestJobStatus.PROCESSING)
+        updated = await jobs.update_status(
+            tenant_id, uuid.UUID(job_id), status=IngestJobStatus.PROCESSING
+        )
+        if updated is None:
+            raise PermanentIngestError(f"Ingest-job {job_id} не найден")
         await session.commit()
         return await service.ingest_ir(
             session,
@@ -234,6 +248,18 @@ def gc_superseded() -> int:
     return removed
 
 
+@celery_app.task(name="lyra.ingest.refresh_index_size", queue="ingest")  # type: ignore[untyped-decorator]
+def refresh_index_size() -> int:
+    """Метрика размера индекса (FR-20) по расписанию.
+
+    Раньше COUNT по всей таблице chunks выполнялся после каждого документа —
+    цена росла с корпусом на самом горячем пути ingest.
+    """
+    return _run_with_session(
+        lambda session: service.refresh_index_size(session, tenant_id=DEFAULT_TENANT_ID)
+    )
+
+
 @celery_app.task(name="lyra.ingest.reindex_collection", queue="ingest")  # type: ignore[untyped-decorator]
 def reindex_collection(collection_id: str) -> int:
     """POST /admin/reindex: новые версии всех документов коллекции.
@@ -269,9 +295,10 @@ def reindex_collection(collection_id: str) -> int:
                     logger.warning("reindex_file_missing", document_id=str(document.id))
                     continue
                 with open(file_path, "rb") as fh:
-                    head = fh.read(64)
+                    head = fh.read(REINDEX_HEAD_BYTES)
                 fmt = detect_format(head, document.title)
                 if fmt is None:
+                    logger.warning("reindex_format_unknown", document_id=str(document.id))
                     continue
                 job = await jobs.create(tenant_id, kind=IngestJobKind.REINDEX, source_id=source.id)
                 await session.commit()

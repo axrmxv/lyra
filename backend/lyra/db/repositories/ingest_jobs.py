@@ -3,10 +3,13 @@
 import uuid
 from typing import Any
 
+import structlog
 from sqlalchemy import select
 
 from lyra.db.models import IngestJob, IngestJobKind, IngestJobStatus
 from lyra.db.repositories.base import BaseRepository
+
+logger = structlog.get_logger(__name__)
 
 
 class IngestJobRepository(BaseRepository):
@@ -58,16 +61,23 @@ class IngestJobRepository(BaseRepository):
         tenant_id: uuid.UUID,
         job_id: uuid.UUID,
         *,
-        status: IngestJobStatus,
+        status: IngestJobStatus | None = None,
         error: str | None = None,
         steps: dict[str, Any] | None = None,
         document_version_id: uuid.UUID | None = None,
         celery_task_id: str | None = None,
     ) -> IngestJob | None:
+        """Обновляет переданные поля; status=None оставляет статус как есть.
+
+        None в ответе — job не найден: вызывающий обязан это обработать,
+        молчаливый no-op прятал бы потерянную задачу.
+        """
         job = await self.get(tenant_id, job_id)
         if job is None:
+            logger.warning("ingest_job_missing", job_id=str(job_id))
             return None
-        job.status = status
+        if status is not None:
+            job.status = status
         if error is not None:
             job.error = error
         if steps is not None:
