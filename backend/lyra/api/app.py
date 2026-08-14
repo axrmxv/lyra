@@ -30,6 +30,12 @@ from lyra.core.logging import configure_logging
 
 logger = structlog.get_logger(__name__)
 
+# Путь, тело которого может быть большим (api-contract §2)
+UPLOAD_PATH = "/api/v1/documents/upload"
+# Запас на multipart-конверт (границы, заголовки частей, поле collection_id)
+# поверх лимита на сам файл
+MULTIPART_OVERHEAD_BYTES = 8 * 1024
+
 
 def _error_body(
     code: str, message: str, details: dict[str, object] | None = None
@@ -88,6 +94,30 @@ def create_app() -> FastAPI:
                 {"errors": jsonable_encoder(exc.errors())},
             ),
         )
+
+    @app.middleware("http")
+    async def upload_size_middleware(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        """Отсев заведомо большого тела по Content-Length — до чтения тела.
+
+        Именно middleware, а не dependency роута: для эндпоинтов с form/file
+        FastAPI разбирает multipart раньше, чем решает зависимости, поэтому
+        оттуда опередить парсер невозможно. Content-Length может отсутствовать
+        (chunked) или врать — это ранний отсев, а не проверка; авторитетно
+        размер считается при записи файла.
+        """
+        if request.method == "POST" and request.url.path == UPLOAD_PATH:
+            raw = request.headers.get("Content-Length")
+            limit = get_settings().upload_max_bytes
+            if raw is not None and raw.isdigit() and int(raw) > limit + MULTIPART_OVERHEAD_BYTES:
+                return JSONResponse(
+                    status_code=413,
+                    content=_error_body(
+                        "payload_too_large", f"Файл больше {limit // (1024 * 1024)} МБ"
+                    ),
+                )
+        return await call_next(request)
 
     @app.middleware("http")
     async def trace_id_middleware(

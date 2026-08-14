@@ -37,6 +37,34 @@ class ConflictError(LyraError):
     status_code = 409
 
 
+class InvalidSourceConfigError(LyraError):
+    """config источника не соответствует форме своего типа (api-contract §2)."""
+
+    code = "invalid_source_config"
+    status_code = 400
+
+
+class SecretInConfigError(LyraError):
+    """В config источника нашёлся секрет: только token_secret_ref на env."""
+
+    code = "secret_in_config"
+    status_code = 400
+
+
+class PayloadTooLargeError(LyraError):
+    """Загружаемый файл больше upload_max_bytes (api-contract §2)."""
+
+    code = "payload_too_large"
+    status_code = 413
+
+
+class UnsupportedFileTypeError(LyraError):
+    """Формат файла не входит в SUPPORTED_FORMATS (api-contract §2)."""
+
+    code = "unsupported_file_type"
+    status_code = 415
+
+
 class ServiceUnavailableError(LyraError):
     """Зависимость недоступна (брокер, LLM) — честная 503 (architecture §4)."""
 
