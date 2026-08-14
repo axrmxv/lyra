@@ -105,11 +105,29 @@ class ChatRepository(BaseRepository):
         result = await self.session.execute(
             select(Message)
             .where(Message.tenant_id == tenant_id, Message.session_id == session_id)
-            .order_by(Message.created_at)
+            # Сортировка устойчива: без id страницы могли бы пересекаться
+            .order_by(Message.created_at, Message.id)
             .limit(limit)
             .offset(offset)
         )
         return list(result.scalars())
+
+    async def list_recent_messages(
+        self, tenant_id: uuid.UUID, session_id: uuid.UUID, *, limit: int
+    ) -> list[Message]:
+        """Хвост переписки в хронологическом порядке — история для графа.
+
+        Именно хвост, а не первая страница: срез по limit=200 из list_messages
+        в длинной сессии отдавал бы начало разговора вместо последних реплик.
+        """
+        result = await self.session.execute(
+            select(Message)
+            .where(Message.tenant_id == tenant_id, Message.session_id == session_id)
+            # id — uuid7, монотонный: разводит сообщения с одинаковым created_at
+            .order_by(Message.created_at.desc(), Message.id.desc())
+            .limit(limit)
+        )
+        return list(reversed(list(result.scalars())))
 
     async def count_messages(self, tenant_id: uuid.UUID, session_id: uuid.UUID) -> int:
         result = await self.session.execute(
