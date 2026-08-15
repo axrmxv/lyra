@@ -23,6 +23,20 @@ def test_detect_format() -> None:
     assert detect_format("# Заголовок".encode(), "readme.md") == "markdown"
     assert detect_format("просто текст".encode(), "note.txt") == "txt"
     assert detect_format(b"\xff\xfe\x00\x01\x02", "bin.dat") is None
+    # Декодируется, но формат не наш — расширения по белому списку
+    assert detect_format(b"col1,col2", "data.csv") is None
+
+
+def test_detect_format_on_truncated_head() -> None:
+    """Голова файла, обрезанная посреди кириллической пары, остаётся текстом.
+
+    Так вызывают detect_format upload и reindex: не весь файл, а первые
+    килобайты (регрессия — документы молча выпадали из реиндекса).
+    """
+    head = "Отпуск предоставляется".encode()[:9]
+    with pytest.raises(UnicodeDecodeError):  # голова действительно обрывается на середине
+        head.decode("utf-8")
+    assert detect_format(head, "hr-otpusk.md") == "markdown"
 
 
 # --- markdown ---

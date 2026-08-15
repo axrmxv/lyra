@@ -4,14 +4,16 @@ POST /documents/upload синхронно только сохраняет фай
 Celery-задачу (FR-2) — парсинг/эмбеддинг в API-процессе запрещены.
 """
 
+import contextlib
 import os
 import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, UploadFile
 from kombu.exceptions import OperationalError
+from starlette.concurrency import run_in_threadpool
 
-from lyra.api.deps import SessionDep, require_role
+from lyra.api.deps import LimitDep, OffsetDep, SessionDep, require_role
 from lyra.api.schemas.ingest import (
     DocumentDetail,
     DocumentOut,
@@ -21,23 +23,57 @@ from lyra.api.schemas.ingest import (
 )
 from lyra.core.config import get_settings
 from lyra.core.constants import DEFAULT_TENANT_ID
-from lyra.core.errors import LyraError, NotFoundError, ServiceUnavailableError
-from lyra.db.models import DocumentStatus, IngestJobKind, SourceType, UserRole
+from lyra.core.errors import (
+    NotFoundError,
+    PayloadTooLargeError,
+    ServiceUnavailableError,
+    UnsupportedFileTypeError,
+)
+from lyra.db.models import DocumentStatus, IngestJobKind, UserRole
 from lyra.db.repositories import DocumentRepository, IngestJobRepository, SourceRepository
 from lyra.ingest.parsers import detect_format
 from lyra.workers.tasks.ingest import process_upload
 
 router = APIRouter(tags=["documents"])
 
+# Головы файла хватает и magic bytes, и текстовой эвристике detect_format
+UPLOAD_HEAD_BYTES = 4096
+COPY_CHUNK_BYTES = 1024 * 1024
 
-class PayloadTooLarge(LyraError):
-    code = "payload_too_large"
-    status_code = 413
+
+def _too_large(limit: int) -> PayloadTooLargeError:
+    return PayloadTooLargeError(f"Файл больше {limit // (1024 * 1024)} МБ")
 
 
-class UnsupportedFileType(LyraError):
-    code = "unsupported_file_type"
-    status_code = 415
+async def _store_upload(file: UploadFile, *, upload_dir: str, name: str, limit: int) -> str:
+    """Копирование чанками в отдельном потоке (правило «async-only I/O»).
+
+    Файл не собирается в памяти целиком, а размер считается по факту записи —
+    Content-Length и UploadFile.size проверяются раньше, но авторитетен этот
+    счётчик. Пишем во временное имя и подменяем os.replace: параллельная
+    повторная загрузка того же документа не даст воркеру прочитать половину.
+    """
+    path = os.path.join(upload_dir, name)
+    tmp_path = f"{path}.part"
+
+    def write() -> None:
+        os.makedirs(upload_dir, exist_ok=True)
+        try:
+            written = 0
+            with open(tmp_path, "wb") as fh:
+                while chunk := file.file.read(COPY_CHUNK_BYTES):
+                    written += len(chunk)
+                    if written > limit:
+                        raise _too_large(limit)
+                    fh.write(chunk)
+            os.replace(tmp_path, path)
+        except BaseException:
+            with contextlib.suppress(OSError):
+                os.remove(tmp_path)
+            raise
+
+    await run_in_threadpool(write)
+    return path
 
 
 @router.post(
@@ -52,38 +88,32 @@ async def upload_document(
     session: SessionDep,
 ) -> UploadAccepted:
     settings = get_settings()
-    content = await file.read()
-    if len(content) > settings.upload_max_bytes:
-        raise PayloadTooLarge(f"Файл больше {settings.upload_max_bytes // (1024 * 1024)} МБ")
+    if file.size is not None and file.size > settings.upload_max_bytes:
+        raise _too_large(settings.upload_max_bytes)
     filename = file.filename or "upload.txt"
-    fmt = detect_format(content, filename)
+    # Формат — по голове файла: содержимое целиком в память не поднимается
+    fmt = detect_format(await file.read(UPLOAD_HEAD_BYTES), filename)
     if fmt is None:
-        raise UnsupportedFileType("Поддерживаются PDF, DOCX, Markdown, TXT")
+        raise UnsupportedFileTypeError("Поддерживаются PDF, DOCX, Markdown, TXT")
+    await file.seek(0)
 
     tenant_id = DEFAULT_TENANT_ID
     sources = SourceRepository(session)
     documents = DocumentRepository(session)
 
     # Неявный upload-source коллекции (api-contract §2)
-    source = await sources.get_upload_source(tenant_id, collection_id)
-    if source is None:
-        source = await sources.create(
-            tenant_id,
-            collection_id=collection_id,
-            type_=SourceType.UPLOAD,
-            name="Загрузки",
-        )
-    document = await documents.get_by_external_id(
-        tenant_id, source.id, filename
-    ) or await documents.create(
+    source = await sources.get_or_create_upload_source(tenant_id, collection_id)
+    document = await documents.get_or_create_by_external_id(
         tenant_id, source_id=source.id, external_id=filename, title=filename
     )
 
     # Файл хранится по id документа — реиндекс и повторные версии находят его
-    os.makedirs(settings.upload_dir, exist_ok=True)
-    file_path = os.path.join(settings.upload_dir, str(document.id))
-    with open(file_path, "wb") as fh:
-        fh.write(content)
+    file_path = await _store_upload(
+        file,
+        upload_dir=settings.upload_dir,
+        name=str(document.id),
+        limit=settings.upload_max_bytes,
+    )
 
     job = await IngestJobRepository(session).create(
         tenant_id, kind=IngestJobKind.UPLOAD, source_id=source.id
@@ -97,9 +127,8 @@ async def upload_document(
         raise ServiceUnavailableError(
             "Очередь обработки недоступна, повторите загрузку позже"
         ) from exc
-    await IngestJobRepository(session).update_status(
-        tenant_id, job.id, status=job.status, celery_task_id=task.id
-    )
+    # Только celery_task_id: статус к этому моменту мог уже перевести воркер
+    await IngestJobRepository(session).update_status(tenant_id, job.id, celery_task_id=task.id)
     await session.commit()
     return UploadAccepted(job_id=job.id, document_id=document.id, status=job.status)
 
@@ -108,8 +137,8 @@ async def upload_document(
 async def list_documents(
     session: SessionDep,
     source_id: uuid.UUID | None = None,
-    limit: int = 50,
-    offset: int = 0,
+    limit: LimitDep = 50,
+    offset: OffsetDep = 0,
 ) -> DocumentsPage:
     # Пагинация items/total — преамбула api-contract; голый список был
     # отступлением фазы 2 от контракта

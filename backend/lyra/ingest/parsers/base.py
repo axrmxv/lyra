@@ -1,35 +1,58 @@
 """Диспетчер парсеров и определение формата по содержимому (magic bytes).
 
 Формат определяется по содержимому, не по расширению (docs/security §7):
-расширение — только подсказка для текстовых форматов.
+расширение — только подсказка внутри текстовых форматов (md или txt).
 """
+
+import codecs
+import os
 
 from lyra.ingest.ir import DocumentIR
 
 SUPPORTED_FORMATS = ("pdf", "docx", "markdown", "txt")
+
+# Белый список текстовых расширений: всё, что декодируется в UTF-8, но названо
+# иначе, не наш формат (SUPPORTED_FORMATS) и до парсера не доходит
+_TEXT_EXTENSIONS = {
+    "": "txt",
+    ".txt": "txt",
+    ".text": "txt",
+    ".md": "markdown",
+    ".markdown": "markdown",
+}
 
 
 class ParserError(Exception):
     """Permanent-ошибка парсинга: не ретраится (ADR-008)."""
 
 
+def _is_utf8_prefix(content: bytes) -> bool:
+    """UTF-8 ли буфер, который может обрываться на середине символа.
+
+    detect_format вызывается на голове файла (upload, reindex), поэтому
+    незавершённая хвостовая последовательность — не признак чужой кодировки:
+    инкрементальный декодер буферизует её вместо UnicodeDecodeError.
+    """
+    try:
+        codecs.getincrementaldecoder("utf-8")().decode(content, final=False)
+    except UnicodeDecodeError:
+        return False
+    return True
+
+
 def detect_format(content: bytes, filename: str) -> str | None:
-    """pdf | docx | markdown | txt | None (не поддержан)."""
+    """pdf | docx | markdown | txt | None (не поддержан).
+
+    content — файл целиком или его начало (достаточно первых килобайт).
+    """
     if content.startswith(b"%PDF-"):
         return "pdf"
-    if content.startswith(b"PK\x03\x04") and filename.lower().endswith(".docx"):
-        return "docx"
     if content.startswith(b"PK\x03\x04"):
-        return None  # zip, но не заявлен docx — не рискуем
-    try:
-        content.decode("utf-8")
-    except UnicodeDecodeError:
+        # zip-контейнер: docx только если заявлен расширением, иначе не рискуем
+        return "docx" if filename.lower().endswith(".docx") else None
+    if not _is_utf8_prefix(content):
         return None
-    if filename.lower().endswith((".md", ".markdown")):
-        return "markdown"
-    if filename.lower().endswith(".txt") or not filename.lower().endswith((".exe", ".bin", ".zip")):
-        return "txt"
-    return None
+    return _TEXT_EXTENSIONS.get(os.path.splitext(filename)[1].lower())
 
 
 def parse_document(content: bytes, *, fmt: str, title: str) -> DocumentIR:

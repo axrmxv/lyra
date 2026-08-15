@@ -4,6 +4,7 @@
 здесь — синхронная часть API: валидация, неявный upload-source, персистенция.
 """
 
+import os
 import uuid
 from collections.abc import AsyncIterator
 
@@ -136,6 +137,50 @@ async def test_upload_too_large_413(
     )
     assert response.status_code == 413
     assert dispatched == []
+
+
+async def test_upload_oversized_body_rejected_before_parsing(
+    env: dict[str, object],
+    dispatched: list[tuple[str, ...]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Тело больше лимита отсекается по Content-Length, до разбора multipart."""
+    monkeypatch.setenv("LYRA_UPLOAD_MAX_BYTES", "1024")
+    get_settings.cache_clear()
+    client: AsyncClient = env["client"]  # type: ignore[assignment]
+    response = await client.post(
+        "/api/v1/documents/upload",
+        content=b"x" * 200_000,
+        headers={
+            **env["headers"],  # type: ignore[dict-item]
+            "Content-Type": "multipart/form-data; boundary=nope",
+        },
+    )
+    # 413, а не 422 от валидации формы — значит до парсера дело не дошло
+    assert response.status_code == 413
+    assert response.json()["error"]["code"] == "payload_too_large"
+    assert dispatched == []
+
+
+async def test_upload_cyrillic_head_detected(
+    env: dict[str, object], dispatched: list[tuple[str, ...]]
+) -> None:
+    """Формат определяется по голове файла; обрыв на кириллице её не ломает."""
+    body = ("# Отпуск\n\n" + "Сотрудникам предоставляется 28 дней. " * 500).encode()
+    client: AsyncClient = env["client"]  # type: ignore[assignment]
+    response = await client.post(
+        "/api/v1/documents/upload",
+        files={"file": ("hr-otpusk.md", body, "text/markdown")},
+        data={"collection_id": str(env["collection_id"])},
+        headers=env["headers"],  # type: ignore[arg-type]
+    )
+    assert response.status_code == 202, response.text
+    _job_id, _document_id, file_path, _filename, fmt = dispatched[0]
+    assert fmt == "markdown"
+    # Файл записан целиком и без временного .part рядом
+    with open(file_path, "rb") as fh:
+        assert fh.read() == body
+    assert not os.path.exists(f"{file_path}.part")
 
 
 async def test_upload_unsupported_type_415(

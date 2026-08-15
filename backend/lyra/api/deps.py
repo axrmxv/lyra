@@ -9,7 +9,7 @@ from collections.abc import Callable
 from typing import Annotated
 
 import jwt as pyjwt
-from fastapi import Depends, Request
+from fastapi import Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from lyra.core.auth import decode_access_token, role_satisfies
@@ -22,6 +22,10 @@ from lyra.db.repositories import UserRepository
 from lyra.db.session import get_session
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
+
+# Границы пагинации, общие для всех списочных эндпоинтов (api-contract, преамбула)
+LimitDep = Annotated[int, Query(ge=1, le=200)]
+OffsetDep = Annotated[int, Query(ge=0)]
 
 
 async def current_user(request: Request, session: SessionDep) -> User:
@@ -66,6 +70,19 @@ async def chat_rate_limit(user: CurrentUserDep) -> None:
     if not decision.allowed:
         raise RateLimitError(
             "Слишком много запросов к чату, попробуйте позже",
+            retry_after_s=decision.retry_after_s,
+        )
+
+
+async def search_rate_limit(user: CurrentUserDep) -> None:
+    """Per-user лимит /search: за эндпоинтом стоит CPU-reranker, такой же
+    дефицитный ресурс, как LLM за /chat (security-and-access §7)."""
+    decision = await get_rate_limiter().hit(
+        f"rl:search:{user.id}", get_settings().rate_limit_search_per_minute
+    )
+    if not decision.allowed:
+        raise RateLimitError(
+            "Слишком много поисковых запросов, попробуйте позже",
             retry_after_s=decision.retry_after_s,
         )
 
