@@ -63,6 +63,8 @@ class Settings(BaseSettings):
     # security-and-access §7 — защита локальной LLM от случайного DoS)
     rate_limit_chat_per_minute: int = 10
     rate_limit_login_per_minute: int = 5
+    # /search без генерации, но с тем же CPU-reranker — лимит мягче, чем у чата
+    rate_limit_search_per_minute: int = 30
     llm_max_concurrency: int = 2  # одновременных генераций; переполнение → 429
     llm_overload_retry_after_s: int = 30  # Retry-After при занятом семафоре
     chat_history_messages: int = 10  # хвост истории сессии в контекст графа
