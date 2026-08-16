@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 
 from lyra.api.deps import CurrentUserDep, SessionDep, login_rate_limit
 from lyra.api.schemas.auth import LoginRequest, LoginResponse, UserOut
-from lyra.core.auth import create_access_token, verify_password
+from lyra.core.auth import create_access_token, verify_password, verify_password_dummy
 from lyra.core.config import get_settings
 from lyra.core.constants import DEFAULT_TENANT_ID
 from lyra.core.errors import UnauthorizedError
@@ -16,12 +16,14 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @router.post("/login", dependencies=[Depends(login_rate_limit)])
 async def login(body: LoginRequest, session: SessionDep) -> LoginResponse:
     user = await UserRepository(session).get_by_email(DEFAULT_TENANT_ID, body.email)
-    # Единое сообщение для "нет пользователя" и "неверный пароль" — не раскрываем,
-    # какие email существуют (docs/security-and-access.md §7)
-    if user is None or not verify_password(body.password, user.password_hash):
+    # Единое сообщение и одинаковое время ответа для "нет пользователя",
+    # "неверный пароль" и "деактивирован" — какие email существуют, эндпоинт
+    # не раскрывает ни текстом, ни задержкой (docs/security-and-access.md §7)
+    if user is None:
+        verify_password_dummy()
         raise UnauthorizedError("Неверный email или пароль")
-    if not user.is_active:
-        raise UnauthorizedError("Пользователь деактивирован")
+    if not verify_password(body.password, user.password_hash) or not user.is_active:
+        raise UnauthorizedError("Неверный email или пароль")
     token, expires_in = create_access_token(
         user_id=user.id,
         tenant_id=user.tenant_id,
