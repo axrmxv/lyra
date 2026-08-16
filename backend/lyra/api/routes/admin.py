@@ -7,7 +7,7 @@ import uuid
 
 from fastapi import APIRouter, Depends
 
-from lyra.api.deps import SessionDep, require_role
+from lyra.api.deps import LimitDep, OffsetDep, SessionDep, require_role
 from lyra.api.schemas.admin import (
     CollectionCreate,
     CollectionOut,
@@ -40,7 +40,7 @@ router = APIRouter(
 
 
 @router.get("/users")
-async def list_users(session: SessionDep, limit: int = 50, offset: int = 0) -> UsersPage:
+async def list_users(session: SessionDep, limit: LimitDep = 50, offset: OffsetDep = 0) -> UsersPage:
     users, total = await UserRepository(session).list(DEFAULT_TENANT_ID, limit=limit, offset=offset)
     return UsersPage(items=[UserOut.model_validate(u) for u in users], total=total)
 
@@ -147,7 +147,7 @@ async def get_eval_run(run_id: uuid.UUID, session: SessionDep) -> EvalRunOut:
 
 @router.get("/collections")
 async def list_collections(
-    session: SessionDep, limit: int = 50, offset: int = 0
+    session: SessionDep, limit: LimitDep = 50, offset: OffsetDep = 0
 ) -> CollectionsPage:
     collections, total = await CollectionRepository(session).list(
         DEFAULT_TENANT_ID, limit=limit, offset=offset

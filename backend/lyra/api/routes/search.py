@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends
 
-from lyra.api.deps import require_role
+from lyra.api.deps import require_role, search_rate_limit
 from lyra.api.schemas.search import SearchRequest, SearchResponse, SearchResultItem
 from lyra.core.config import get_settings
 from lyra.core.constants import DEFAULT_TENANT_ID
@@ -14,7 +14,10 @@ from lyra.retrieval.retriever import HybridRetriever
 router = APIRouter(tags=["search"])
 
 
-@router.post("/search", dependencies=[Depends(require_role(UserRole.VIEWER))])
+@router.post(
+    "/search",
+    dependencies=[Depends(require_role(UserRole.VIEWER)), Depends(search_rate_limit)],
+)
 async def search(body: SearchRequest) -> SearchResponse:
     # Retriever получает фабрику сессий: каналы выполняются параллельно,
     # каждому нужна собственная сессия (ADR-005)
