@@ -6,6 +6,7 @@ viewer < editor < admin (§2): require_role сравнивает по рангу
 
 import uuid
 from datetime import UTC, datetime, timedelta
+from functools import lru_cache
 from typing import Any
 
 import jwt
@@ -35,6 +36,22 @@ def verify_password(password: str, password_hash: str) -> bool:
         return _hasher.verify(password_hash, password)
     except VerificationError:
         return False
+
+
+@lru_cache
+def _dummy_hash() -> str:
+    """Хэш-заглушка; считается один раз при первой холостой проверке."""
+    return _hasher.hash("lyra-dummy-password")
+
+
+def verify_password_dummy() -> None:
+    """Холостая проверка пароля для несуществующего пользователя.
+
+    Без неё ответ на неизвестный email возвращался бы заметно быстрее, чем
+    на существующий с неверным паролем, — единое сообщение об ошибке
+    (docs/security-and-access.md §7) обходилось бы замером времени.
+    """
+    verify_password("lyra-dummy-password-probe", _dummy_hash())
 
 
 def create_access_token(

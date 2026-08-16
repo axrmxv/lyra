@@ -1,10 +1,11 @@
 """Источники и ingest-jobs (docs/api-contract.md §2)."""
 
 import uuid
+from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from lyra.api.deps import SessionDep, require_role
+from lyra.api.deps import LimitDep, OffsetDep, SessionDep, require_role
 from lyra.api.schemas.ingest import (
     JobOut,
     JobsPage,
@@ -13,34 +14,49 @@ from lyra.api.schemas.ingest import (
     SourcePatch,
     SourcesPage,
     SyncAccepted,
+    public_config,
+    validate_source_config,
 )
 from lyra.core.constants import DEFAULT_TENANT_ID
 from lyra.core.errors import NotFoundError
-from lyra.db.models import IngestJobStatus, SourceStatus, UserRole
+from lyra.db.models import IngestJobStatus, Source, SourceStatus, User, UserRole
 from lyra.db.repositories import IngestJobRepository, SourceRepository
 from lyra.workers.tasks.ingest import sync_source
 
 router = APIRouter(tags=["sources"])
 
-VIEWER = Depends(require_role(UserRole.VIEWER))
+ViewerDep = Annotated[User, Depends(require_role(UserRole.VIEWER))]
 EDITOR = Depends(require_role(UserRole.EDITOR))
 
 
-@router.get("/sources", dependencies=[VIEWER])
+def _source_out(source: Source, user: User) -> SourceOut:
+    """config целиком — только admin: email и token_secret_ref описывают
+    внутренний контур и viewer'у не предназначены (security-and-access §5)."""
+    out = SourceOut.model_validate(source)
+    if user.role is not UserRole.ADMIN:
+        out.config = public_config(out.config)
+    return out
+
+
+@router.get("/sources")
 async def list_sources(
     session: SessionDep,
+    user: ViewerDep,
     collection_id: uuid.UUID | None = None,
-    limit: int = 50,
-    offset: int = 0,
+    limit: LimitDep = 50,
+    offset: OffsetDep = 0,
 ) -> SourcesPage:
     sources, total = await SourceRepository(session).list(
         DEFAULT_TENANT_ID, collection_id=collection_id, limit=limit, offset=offset
     )
-    return SourcesPage(items=[SourceOut.model_validate(s) for s in sources], total=total)
+    return SourcesPage(items=[_source_out(s, user) for s in sources], total=total)
 
 
-@router.post("/sources", status_code=201, dependencies=[EDITOR])
-async def create_source(body: SourceCreate, session: SessionDep) -> SourceOut:
+@router.post("/sources", status_code=201)
+async def create_source(
+    body: SourceCreate, session: SessionDep, user: Annotated[User, EDITOR]
+) -> SourceOut:
+    validate_source_config(body.type, body.config)
     source = await SourceRepository(session).create(
         DEFAULT_TENANT_ID,
         collection_id=body.collection_id,
@@ -50,20 +66,31 @@ async def create_source(body: SourceCreate, session: SessionDep) -> SourceOut:
         sync_schedule=body.sync_schedule,
     )
     await session.commit()
-    return SourceOut.model_validate(source)
+    return _source_out(source, user)
 
 
-@router.get("/sources/{source_id}", dependencies=[VIEWER])
-async def get_source(source_id: uuid.UUID, session: SessionDep) -> SourceOut:
+@router.get("/sources/{source_id}")
+async def get_source(source_id: uuid.UUID, session: SessionDep, user: ViewerDep) -> SourceOut:
     source = await SourceRepository(session).get(DEFAULT_TENANT_ID, source_id)
     if source is None:
         raise NotFoundError("Источник не найден")
-    return SourceOut.model_validate(source)
+    return _source_out(source, user)
 
 
-@router.patch("/sources/{source_id}", dependencies=[EDITOR])
-async def patch_source(source_id: uuid.UUID, body: SourcePatch, session: SessionDep) -> SourceOut:
-    source = await SourceRepository(session).update(
+@router.patch("/sources/{source_id}")
+async def patch_source(
+    source_id: uuid.UUID,
+    body: SourcePatch,
+    session: SessionDep,
+    user: Annotated[User, EDITOR],
+) -> SourceOut:
+    repo = SourceRepository(session)
+    if body.config is not None:
+        existing = await repo.get(DEFAULT_TENANT_ID, source_id)
+        if existing is None:
+            raise NotFoundError("Источник не найден")
+        validate_source_config(existing.type, body.config)
+    source = await repo.update(
         DEFAULT_TENANT_ID,
         source_id,
         name=body.name,
@@ -74,7 +101,7 @@ async def patch_source(source_id: uuid.UUID, body: SourcePatch, session: Session
     if source is None:
         raise NotFoundError("Источник не найден")
     await session.commit()
-    return SourceOut.model_validate(source)
+    return _source_out(source, user)
 
 
 @router.delete("/sources/{source_id}", status_code=204, dependencies=[EDITOR])
@@ -101,8 +128,8 @@ async def list_jobs(
     session: SessionDep,
     status: IngestJobStatus | None = None,
     source_id: uuid.UUID | None = None,
-    limit: int = 50,
-    offset: int = 0,
+    limit: LimitDep = 50,
+    offset: OffsetDep = 0,
 ) -> JobsPage:
     jobs = await IngestJobRepository(session).list(
         DEFAULT_TENANT_ID, status=status, source_id=source_id, limit=limit, offset=offset

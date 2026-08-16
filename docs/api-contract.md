@@ -5,9 +5,9 @@ REST API FastAPI, префикс `/api/v1`. Все схемы — Pydantic v2, O
 **Общие правила**
 - Аутентификация: `Authorization: Bearer <JWT>`. Роли: `viewer` ≤ `editor` ≤ `admin`; минимальная роль указана у каждого эндпоинта.
 - Ошибки — единый формат: `{"error": {"code": "string", "message": "string", "details": {}}}`, HTTP-коды: 400 валидация, 401/403 доступ, 404, 409 конфликт, 422 семантика, 429 rate limit, 503 деградация (LLM/зависимость недоступна).
-- 429 всегда несёт заголовок `Retry-After` (секунды); коды: `rate_limited` (лимит запросов: /chat — per-user, /auth/login — per-IP), `overloaded` (заняты все слоты одновременных генераций LLM).
+- 429 всегда несёт заголовок `Retry-After` (секунды); коды: `rate_limited` (лимит запросов: /chat и /search — per-user, /auth/login — per-IP), `overloaded` (заняты все слоты одновременных генераций LLM).
 - Все ответы содержат заголовок `X-Trace-Id`.
-- Пагинация: `?limit=&offset=`, ответ `{"items": [...], "total": int}`, где `total` — общее число записей (список источников, документов, сессий, сообщений, фидбека, пользователей, коллекций). Исключение — `GET /ingest/jobs`: `total` равен длине текущей страницы, поэтому клиент определяет наличие следующей страницы по `items.length == limit`.
+- Пагинация: `?limit=&offset=` (`1 ≤ limit ≤ 200`, `offset ≥ 0`; выход за границы — 400 `validation_error`), ответ `{"items": [...], "total": int}`, где `total` — общее число записей (список источников, документов, сессий, сообщений, фидбека, пользователей, коллекций). Исключение — `GET /ingest/jobs`: `total` равен длине текущей страницы, поэтому клиент определяет наличие следующей страницы по `items.length == limit`.
 
 ---
 
@@ -61,7 +61,9 @@ REST API FastAPI, префикс `/api/v1`. Все схемы — Pydantic v2, O
             "token_secret_ref": "CONFLUENCE_TOKEN"},
  "sync_schedule": "0 * * * *"}
 ```
-Секрет передаётся ссылкой на env-переменную, не значением ([security-and-access.md](security-and-access.md)).
+Секрет передаётся ссылкой на env-переменную, не значением ([security-and-access.md](security-and-access.md)). `config` валидируется по типу источника (лишние ключи отвергаются) и сканируется тем же детектором секретов, что и корпус при ingest: находка → 400 `secret_in_config`, источник не создаётся. Несоответствие формы → 400 `invalid_source_config`.
+
+В ответах `config` полностью виден только admin; viewer и editor получают срез (`base_url`, `spaces`) — `email` и `token_secret_ref` описывают внутренний контур.
 
 ### Documents — viewer (чтение), editor (удаление)
 - `GET /documents?collection_id=&source_id=&q=&limit=&offset=` — список с метаданными и версией (`limit=50` по умолчанию).

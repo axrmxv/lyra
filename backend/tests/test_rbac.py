@@ -276,6 +276,38 @@ async def test_login_wrong_password(
     assert response.status_code == 401
 
 
+async def test_login_does_not_reveal_existing_emails(
+    client: AsyncClient, users_by_role: dict[UserRole, User], migrated_db: Settings
+) -> None:
+    """Неизвестный email, неверный пароль и деактивированный — неотличимы.
+
+    Регрессия: у деактивированного было своё сообщение, а для неизвестного
+    email проверка пароля вовсе не выполнялась — существование учётки
+    вычислялось по тексту ошибки и по времени ответа.
+    """
+    user = users_by_role[UserRole.VIEWER]
+    inactive = users_by_role[UserRole.EDITOR]
+    dsn = migrated_db.database_dsn.replace("postgresql://", "postgresql+asyncpg://")
+    engine = create_async_engine(dsn)
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+    async with maker() as session:
+        await UserRepository(session).update(DEFAULT_TENANT_ID, inactive.id, is_active=False)
+        await session.commit()
+    await engine.dispose()
+
+    cases = [
+        {"email": f"no-such-{uuid.uuid4().hex[:6]}@lyra.local", "password": "whatever1"},
+        {"email": user.email, "password": "wrong-password"},
+        {"email": inactive.email, "password": "password1"},
+    ]
+    bodies = []
+    for payload in cases:
+        response = await client.post("/api/v1/auth/login", json=payload)
+        assert response.status_code == 401
+        bodies.append(response.json()["error"])
+    assert len({(body["code"], body["message"]) for body in bodies}) == 1
+
+
 async def test_inactive_user_rejected(
     client: AsyncClient, users_by_role: dict[UserRole, User], migrated_db: Settings
 ) -> None:

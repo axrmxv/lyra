@@ -1,11 +1,13 @@
 """Схемы ingest-эндпоинтов (docs/api-contract.md §2)."""
 
+import json
 import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from lyra.core.errors import InvalidSourceConfigError, SecretInConfigError
 from lyra.db.models import (
     DocumentStatus,
     IngestJobKind,
@@ -13,6 +15,61 @@ from lyra.db.models import (
     SourceStatus,
     SourceType,
 )
+from lyra.ingest.secrets_scan import scan_text
+
+# Ключи config, видные viewer'у: показывают, что синхронизируется. Остальное
+# (email, token_secret_ref) — внутренний контур (security-and-access §5)
+PUBLIC_CONFIG_KEYS = frozenset({"base_url", "spaces"})
+
+
+class ConfluenceSourceConfig(BaseModel):
+    """Конфигурация Confluence-источника (ingest/connectors/confluence.py).
+
+    extra="forbid": лишние ключи — обычно попытка положить сюда сам токен.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    base_url: str = Field(min_length=1)
+    spaces: list[str] = Field(min_length=1)
+    email: str = ""
+    # Только имя env-переменной; значение токена в БД не попадает
+    token_secret_ref: str = "CONFLUENCE_TOKEN"
+
+
+def validate_source_config(type_: SourceType, config: dict[str, Any]) -> None:
+    """Проверка config до записи в БД: форма по типу источника плюс секреты.
+
+    Секреты ищет тот же сканер, что защищает корпус при ingest, — отдельного
+    набора паттернов для конфигурации не заводим. Ошибка доменная, а не
+    ValueError в валидаторе: RequestValidationError вернул бы найденный
+    секрет обратно в details.errors[].input.
+    """
+    findings = scan_text(json.dumps(config, ensure_ascii=False))
+    if findings:
+        kinds = sorted({finding.kind for finding in findings})
+        raise SecretInConfigError(
+            f"В config обнаружен секрет ({', '.join(kinds)}); токен передаётся "
+            "только ссылкой token_secret_ref на env-переменную",
+            details={"kinds": kinds},
+        )
+    if type_ is SourceType.CONFLUENCE:
+        try:
+            ConfluenceSourceConfig.model_validate(config)
+        except ValidationError as exc:
+            # Только имена полей и причины: значения могли бы нести секрет
+            problems = [
+                f"{'.'.join(str(part) for part in error['loc'])}: {error['msg']}"
+                for error in exc.errors()
+            ]
+            raise InvalidSourceConfigError(
+                f"Некорректный config confluence-источника ({'; '.join(problems)})"
+            ) from exc
+
+
+def public_config(config: dict[str, Any]) -> dict[str, Any]:
+    """Срез config для ответа viewer'у."""
+    return {key: value for key, value in config.items() if key in PUBLIC_CONFIG_KEYS}
 
 
 class UploadAccepted(BaseModel):
