@@ -6,8 +6,10 @@
 
 ## 1. Аутентификация
 
-- **[MVP]** JWT (HS256, срок 1 ч), логин по email+паролю (argon2-хэши), seed-пользователи из миграции ([PRD](PRD.md) A-6). Refresh-токенов в MVP нет — перелогин.
-- **[Production]** OIDC/SSO (корпоративный IdP), SCIM-провижининг, refresh-токены, сессии с отзывом.
+- **[MVP]** Вход по email+паролю (argon2-хэши), seed-пользователи из миграции ([PRD](PRD.md) A-6); access-JWT (HS256) на 15 минут.
+- **[MVP]** Сессии с отзывом ([ADR-012](adr/ADR-012-sessions-and-refresh-tokens.md)): строка в таблице `sessions`, `jti` access-токена равен её id, отзыв действует со следующего запроса. Отзывать можно конкретную сессию или все сразу; деактивация пользователя (`is_active`) закрывает доступ независимо.
+- **[MVP]** Refresh-токен на 30 дней в httpOnly Secure cookie (`SameSite=Lax`, `Path=/api/v1/auth`), в БД — только sha256. Одноразовый: каждое обновление выдаёт новый, повторное предъявление старого трактуется как кража и отзывает сессию. Мутирующие auth-эндпоинты защищены double-submit CSRF (`X-CSRF-Token`).
+- **[Production]** OIDC/SSO (корпоративный IdP), SCIM-провижининг. Точка врезки — `issue_session`, инвариант 9 [CLAUDE.md](../.claude/CLAUDE.md).
 
 ## 2. RBAC
 
@@ -59,7 +61,7 @@
 
 | Область | MVP | Задел (схема есть) | Production |
 |---------|-----|--------------------| -----------|
-| AuthN | JWT + seed | — | SSO/OIDC, SCIM |
+| AuthN | Пароль + access-JWT, refresh в cookie, сессии с отзывом | — | SSO/OIDC, SCIM |
 | AuthZ | RBAC на эндпоинты | ACL-поле в chunks, access_context в retrieval | Doc-level ACL enforcement |
 | Тенантность | 1 tenant | tenant_id везде | RLS, tenant-scoped кэш, изоляция |
 | Секреты в данных | Regex-сканер, блокировка | — | NER-PII, политики per collection |

@@ -10,6 +10,7 @@ from lyra.db.models.enums import (
     IngestJobKind,
     IngestJobStatus,
     MessageRole,
+    SessionRevokeReason,
     SourceStatus,
     SourceType,
     TenantStatus,
@@ -17,7 +18,7 @@ from lyra.db.models.enums import (
     VersionStatus,
 )
 from lyra.db.models.evals import EvalDataset, EvalItem, EvalRecord, EvalRun
-from lyra.db.models.identity import Tenant, User
+from lyra.db.models.identity import AuthSession, Tenant, User
 from lyra.db.models.knowledge import (
     EMBEDDING_DIM,
     Chunk,
@@ -30,6 +31,7 @@ from lyra.db.models.knowledge import (
 
 __all__ = [
     "EMBEDDING_DIM",
+    "AuthSession",
     "Base",
     "ChatSession",
     "Chunk",
@@ -51,6 +53,7 @@ __all__ = [
     "Message",
     "MessageCitation",
     "MessageRole",
+    "SessionRevokeReason",
     "Source",
     "SourceStatus",
     "SourceType",

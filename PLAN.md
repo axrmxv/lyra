@@ -74,7 +74,7 @@
 **Статус:** выполнено — 5 под-фаз в main (ADR-011, токены+shell+логин, чат, markdown, действия чата) и серия доработок поверх: режим темы `system`, пагинация списков, поле ввода в стиле современных чатов, брендинг и нейтральная палитра; Vitest зелёный.
 
 ### P1 — Доступ уровня предприятия
-**Объём:** четыре под-фазы. **P1.1** — аутентификация: OIDC/SSO, сессии с отзывом и refresh-токен вместо перелогина (ADR-012). **P1.2** — enforcement doc-level ACL: наследование прав Confluence, фильтр до ранжирования в обоих каналах, subject-aware кэш ([security-and-access.md §3](docs/security-and-access.md), ADR-013). **P1.3** — PII-политики (NER) при ingest: block / mask / tag per collection. **P1.4** — append-only аудит с выгрузкой в SIEM.
+**Объём:** четыре под-фазы. **P1.1** — аутентификация: сессии с отзывом и refresh-токен вместо перелогина ([ADR-012](docs/adr/ADR-012-sessions-and-refresh-tokens.md)); вход по email+паролю остаётся основным, OIDC/SSO вынесен в отдельное решение и в объём P1.1 не входит. **P1.2** — enforcement doc-level ACL: наследование прав Confluence, фильтр до ранжирования в обоих каналах, subject-aware кэш ([security-and-access.md §3](docs/security-and-access.md), ADR-013). **P1.3** — PII-политики (NER) при ingest: block / mask / tag per collection. **P1.4** — append-only аудит с выгрузкой в SIEM.
 **DoD:** пользователь не видит документ без прав ни в ответах, ни в citations, ни в nearest_documents, ни в кэше; тесты на утечки через все пути выдачи; журнал аудита неизменяем на уровне БД. **Оценка:** 2–3 недели.
 
 ### P2 — Мультитенантность и новые источники

@@ -7,6 +7,7 @@ from lyra.db.repositories.documents import DocumentRepository
 from lyra.db.repositories.evals import EvalRepository
 from lyra.db.repositories.feedback import FeedbackRepository
 from lyra.db.repositories.ingest_jobs import IngestJobRepository
+from lyra.db.repositories.sessions import SessionRepository
 from lyra.db.repositories.sources import SourceRepository
 from lyra.db.repositories.users import UserRepository
 
@@ -18,6 +19,7 @@ __all__ = [
     "EvalRepository",
     "FeedbackRepository",
     "IngestJobRepository",
+    "SessionRepository",
     "SourceRepository",
     "UserRepository",
 ]

@@ -197,7 +197,7 @@ flowchart TB
 | Векторное хранилище | pgvector в основной PG | Qdrant (критерии перехода в [ADR-001](adr/ADR-001-vector-store-pgvector-vs-qdrant.md)) |
 | LLM | Ollama локально (Qwen2.5-instruct) | Облачный LLM-API или GPU-кластер, за тем же `LLMClient` |
 | Источники | Файлы + Confluence | + Notion, Google Drive, диски; каталог MCP-коннекторов |
-| Доступ | JWT, RBAC на эндпоинты | SSO/OIDC, ACL на уровне документов при retrieval, аудит-экспорт |
+| Доступ | JWT + refresh, сессии с отзывом (ADR-012), RBAC на эндпоинты | SSO/OIDC, ACL на уровне документов при retrieval, аудит-экспорт |
 | Тенантность | Один tenant (`tenant_id` в схеме) | Полная изоляция per-tenant (RLS / отдельные коллекции) |
 | Развёртывание | docker-compose | Kubernetes, HPA для workers и ML-сервисов, Helm |
 | Очередь | Celery + Redis, 1 worker | Пулы воркеров по типам задач, приоритетные очереди, DLQ |
