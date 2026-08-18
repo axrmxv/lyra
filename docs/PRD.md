@@ -17,7 +17,7 @@ RAG-платформа корпоративных знаний: единая т�
 | A-3 | Embeddings и reranker — self-hosted OSS | Нулевая стоимость API, требование к ресурсам ноутбука/сервера |
 | A-4 | Источники MVP: загрузка файлов (PDF, DOCX, MD, TXT) + один живой коннектор Confluence | Notion, Google Drive, сетевые диски — out-of-scope MVP |
 | A-5 | Демо запускается локально через docker-compose | K8s — только манифесты как артефакт production-трека, без реального кластера |
-| A-6 | Аутентификация MVP: JWT + seed-пользователи (создаются миграцией) | SSO/OAuth/SCIM — production-трек |
+| A-6 | Аутентификация: JWT + refresh-токен и сессии с отзывом (ADR-012), вход по email+паролю, seed-пользователи из миграции | SSO/OAuth/SCIM — production-трек |
 | A-7 | Один tenant в MVP; `tenant_id` присутствует в схеме БД с первого дня | Мультитенантность в runtime — production-трек |
 | A-8 | Демо-корпус: ~100–500 документов, до ~50k chunks | pgvector достаточен; критерии миграции на Qdrant — [ADR-001](adr/ADR-001-vector-store-pgvector-vs-qdrant.md) |
 | A-9 | LLM-judge для offline-evals может быть сильнее генератора (допустим облачный judge в CI, но не в runtime) | Качество eval-метрик не ограничено локальной моделью |

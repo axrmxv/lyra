@@ -20,6 +20,7 @@ Python 3.11+ / FastAPI / Pydantic v2 / SQLAlchemy 2.0 async / Alembic / LangGrap
 6. **Векторный доступ — только через интерфейс VectorStore** (ADR-001); retrieval-код не знает про pgvector.
 7. **Любой путь выдачи данных — через retrieval-слой** (будущая точка ACL-фильтра); tenant_id — параметр всех репозиториев.
 8. **MVP vs production не смешивать**: заделы (ACL, RLS, мультитенант) — в схеме, но без enforcement; не включать их «заодно».
+9. **Сессия выдаётся только через `issue_session`** (ADR-012): прямое создание строки `sessions` или выпуск access/refresh-токена в обход запрещены — это единственная точка, через которую подключается будущий OIDC.
 
 ## Безопасность и секреты (дублируется из docs/security-and-access.md — always-loaded слой)
 - Секреты только в env / GitHub Secrets; в БД — ссылки (`token_secret_ref`), в коде и репозитории — никогда; `.env` в .gitignore, изменения — в `.env.example` с плейсхолдерами.
