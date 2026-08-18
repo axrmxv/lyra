@@ -27,6 +27,13 @@ class SourceStatus(StrEnum):
     ERROR = "error"
 
 
+class SessionRevokeReason(StrEnum):
+    LOGOUT = "logout"
+    REVOKED_BY_USER = "revoked_by_user"
+    # Предъявлен уже использованный refresh — признак кражи (ADR-012)
+    REUSE_DETECTED = "reuse_detected"
+
+
 class DocumentStatus(StrEnum):
     ACTIVE = "active"
     DELETED = "deleted"

@@ -11,6 +11,7 @@ erDiagram
     TENANTS ||--o{ USERS : has
     TENANTS ||--o{ COLLECTIONS : has
     USERS }o--|| ROLES : has
+    USERS ||--o{ SESSIONS : opens
     COLLECTIONS ||--o{ SOURCES : contains
     SOURCES ||--o{ DOCUMENTS : provides
     DOCUMENTS ||--o{ DOCUMENT_VERSIONS : versions
@@ -45,6 +46,23 @@ erDiagram
 | password_hash | text | argon2 |
 | role | enum(admin, editor, viewer) | MVP: роль-поле; отдельная таблица ролей/прав — production при появлении кастомных ролей |
 | is_active | bool | |
+
+### sessions
+
+Сессия входа: единица отзыва доступа ([ADR-012](adr/ADR-012-sessions-and-refresh-tokens.md)). Создаётся только через `issue_session` (инвариант 9 [CLAUDE.md](../.claude/CLAUDE.md)) — это же точка подключения будущего OIDC.
+
+| sessions | Тип | Примечание |
+|----------|-----|------------|
+| user_id | uuid FK users | |
+| refresh_hash | text | sha256 от refresh-токена; сам токен в БД не хранится |
+| expires_at | timestamptz | конец жизни сессии; продлевается при обновлении |
+| last_used_at | timestamptz | последнее обновление — для списка «мои устройства» |
+| revoked_at | timestamptz null | заполнено = сессия мертва |
+| revoked_reason | text null | `logout`, `revoked_by_user`, `reuse_detected` |
+| user_agent | text null | для списка сессий; не является средством аутентификации |
+| ip | inet null | то же |
+
+`jti` access-токена равен `sessions.id`: проверка отзыва встраивается в тот же SELECT, которым `current_user` забирает пользователя. Refresh одноразовый — при обновлении `refresh_hash` перезаписывается, предъявление старого означает кражу и отзывает сессию (`reuse_detected`).
 
 ### collections
 Логическая группа знаний (например «Внутренняя документация»), единица настройки retrieval.
@@ -162,6 +180,9 @@ erDiagram
 | document_versions: unique (document_id, content_hash) | идемпотентность |
 | documents: unique (source_id, external_id) | ключ коннектора |
 | messages: btree (session_id, created_at) | история |
+| sources: unique (tenant_id, collection_id) where type='upload' | ровно один upload-source коллекции |
+| sessions: btree (expires_at) | чистка истёкших |
+| sessions: btree (user_id, revoked_at) | список активных сессий пользователя |
 
 ## 5. Миграции
 
